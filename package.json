@@ -1,0 +1,13 @@
+{
+  "name": "class-resource-hub",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A small class-only resource sharing hub for students.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

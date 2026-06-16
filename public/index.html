@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Class Resource Hub</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <main id="app" class="app-shell" aria-live="polite"></main>
+  <div id="toast" class="toast" role="status"></div>
+
+  <template id="signin-template">
+    <section class="signin-layout">
+      <div class="hero-copy">
+        <p class="eyebrow">Class-only workspace</p>
+        <h1>Class Resource Hub</h1>
+        <p class="hero-subtitle">Files, prompts, links, notes, comments, requests, pins, bookmarks, and announcements for one class.</p>
+        <form id="signin-form" class="signin-form">
+          <label>
+            <span>Your name</span>
+            <input name="name" autocomplete="name" placeholder="Nitish" required minlength="2">
+          </label>
+          <label>
+            <span>Class invite code</span>
+            <input name="inviteCode" placeholder="GENWISE" required>
+          </label>
+          <button class="primary-btn" type="submit">Enter Hub</button>
+        </form>
+      </div>
+      <img class="hero-image" src="/assets/study-hub-hero.png" alt="Study desk with a laptop and floating resource cards">
+    </section>
+  </template>
+
+  <template id="dashboard-template">
+    <section class="dashboard-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Class Resource Hub</p>
+          <h1 id="welcome-title"></h1>
+        </div>
+        <div class="topbar-actions">
+          <button id="theme-toggle" class="icon-btn" type="button" title="Toggle dark mode" aria-label="Toggle dark mode">T</button>
+          <button id="logout-btn" class="ghost-btn" type="button">Sign Out</button>
+        </div>
+      </header>
+
+      <section class="quick-stats" aria-label="Class hub summary">
+        <div>
+          <strong id="stat-resources">0</strong>
+          <span>Resources</span>
+        </div>
+        <div>
+          <strong id="stat-bookmarks">0</strong>
+          <span>Bookmarks</span>
+        </div>
+        <div>
+          <strong id="stat-requests">0</strong>
+          <span>Requests</span>
+        </div>
+        <div>
+          <strong id="stat-code"></strong>
+          <span>Invite Code</span>
+        </div>
+      </section>
+
+      <section class="folder-section">
+        <div class="panel-heading">
+          <h2>Subject Folders</h2>
+          <button id="new-folder-btn" class="ghost-btn small" type="button">New Folder</button>
+        </div>
+        <div id="folder-list" class="folder-list"></div>
+      </section>
+
+      <section class="workspace-grid">
+        <section class="main-column">
+          <div class="toolbar">
+            <div class="search-wrap">
+              <span aria-hidden="true">S</span>
+              <input id="search-input" type="search" placeholder="Search title, subject, tag, text">
+            </div>
+            <select id="type-filter" aria-label="Filter by type">
+              <option value="all">All types</option>
+              <option value="file">Files</option>
+              <option value="text">Text</option>
+              <option value="prompt">Prompts</option>
+              <option value="link">Links</option>
+              <option value="bookmarks">Bookmarks</option>
+            </select>
+            <button id="new-resource-btn" class="primary-btn compact" type="button">Add Resource</button>
+          </div>
+
+          <div id="resource-list" class="resource-list"></div>
+          <p id="empty-resources" class="empty-state">No resources match this view.</p>
+        </section>
+
+        <aside class="side-column">
+          <section class="side-panel">
+            <div class="panel-heading">
+              <h2>Requests</h2>
+              <button id="new-request-btn" class="ghost-btn small" type="button">Ask</button>
+            </div>
+            <div id="request-list" class="stack-list"></div>
+          </section>
+
+          <section class="side-panel">
+            <div class="panel-heading">
+              <h2>Announcements</h2>
+              <button id="new-announcement-btn" class="ghost-btn small" type="button">Post</button>
+            </div>
+            <div id="announcement-list" class="stack-list"></div>
+          </section>
+        </aside>
+      </section>
+    </section>
+
+    <dialog id="resource-dialog" class="modal">
+      <form id="resource-form" method="dialog" class="modal-content">
+        <div class="modal-heading">
+          <h2 id="resource-dialog-title">Add Resource</h2>
+          <button class="icon-btn" value="cancel" type="button" data-close-dialog aria-label="Close">x</button>
+        </div>
+        <input type="hidden" name="id">
+        <div class="type-picker" role="radiogroup" aria-label="Resource type">
+          <label><input type="radio" name="type" value="file" checked> <span>File</span></label>
+          <label><input type="radio" name="type" value="text"> <span>Text</span></label>
+          <label><input type="radio" name="type" value="prompt"> <span>Prompt</span></label>
+          <label><input type="radio" name="type" value="link"> <span>Link</span></label>
+        </div>
+        <div class="form-grid">
+          <label>
+            <span>Title</span>
+            <input name="title" required maxlength="120">
+          </label>
+          <label>
+            <span>Subject Folder</span>
+            <select name="subject"></select>
+          </label>
+        </div>
+        <label>
+          <span>Tags</span>
+          <input name="tags" placeholder="exam, chapter-4, prompt">
+        </label>
+        <label>
+          <span>Description</span>
+          <textarea name="description" rows="3" maxlength="800"></textarea>
+        </label>
+        <label class="field-file">
+          <span>File</span>
+          <input name="file" type="file">
+        </label>
+        <label class="field-url is-hidden">
+          <span>Link</span>
+          <input name="url" type="url" placeholder="https://example.com">
+        </label>
+        <label class="field-content is-hidden">
+          <span>Text or prompt</span>
+          <textarea name="content" rows="7"></textarea>
+        </label>
+        <label class="check-row">
+          <input name="pinned" type="checkbox">
+          <span>Pin this resource</span>
+        </label>
+        <div class="modal-actions">
+          <button class="ghost-btn" type="button" data-close-dialog>Cancel</button>
+          <button class="primary-btn" type="submit">Save Resource</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="request-dialog" class="modal">
+      <form id="request-form" method="dialog" class="modal-content">
+        <div class="modal-heading">
+          <h2>Ask For A Resource</h2>
+          <button class="icon-btn" value="cancel" type="button" data-close-dialog aria-label="Close">x</button>
+        </div>
+        <label>
+          <span>What do you need?</span>
+          <input name="title" required maxlength="120">
+        </label>
+        <label>
+          <span>Subject Folder</span>
+          <select name="subject"></select>
+        </label>
+        <label>
+          <span>Details</span>
+          <textarea name="details" rows="5" maxlength="1000"></textarea>
+        </label>
+        <div class="modal-actions">
+          <button class="ghost-btn" type="button" data-close-dialog>Cancel</button>
+          <button class="primary-btn" type="submit">Post Request</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="announcement-dialog" class="modal">
+      <form id="announcement-form" method="dialog" class="modal-content">
+        <div class="modal-heading">
+          <h2>Post Announcement</h2>
+          <button class="icon-btn" value="cancel" type="button" data-close-dialog aria-label="Close">x</button>
+        </div>
+        <label>
+          <span>Announcement</span>
+          <textarea name="text" rows="5" required maxlength="600"></textarea>
+        </label>
+        <div class="modal-actions">
+          <button class="ghost-btn" type="button" data-close-dialog>Cancel</button>
+          <button class="primary-btn" type="submit">Post</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="folder-dialog" class="modal">
+      <form id="folder-form" method="dialog" class="modal-content">
+        <div class="modal-heading">
+          <h2>New Subject Folder</h2>
+          <button class="icon-btn" value="cancel" type="button" data-close-dialog aria-label="Close">x</button>
+        </div>
+        <label>
+          <span>Folder name</span>
+          <input name="name" required maxlength="60" placeholder="Economics">
+        </label>
+        <div class="modal-actions">
+          <button class="ghost-btn" type="button" data-close-dialog>Cancel</button>
+          <button class="primary-btn" type="submit">Create Folder</button>
+        </div>
+      </form>
+    </dialog>
+  </template>
+
+  <script src="/app.js"></script>
+</body>
+</html>
