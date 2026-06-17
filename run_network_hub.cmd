@@ -2,7 +2,7 @@
 setlocal
 cd /d "%~dp0"
 if "%CLASS_CODE%"=="" set CLASS_CODE=GENWISE
-if "%HOST%"=="" set HOST=127.0.0.1
+if "%HOST%"=="" set HOST=0.0.0.0
 if "%PORT%"=="" set PORT=4173
 
 set CODEX_NODE=%USERPROFILE%\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe

@@ -2,6 +2,10 @@
 
 A class-only resource sharing website for a small group of students.
 
+GitHub repo: https://github.com/Akshaan2012/class-resource-hub
+
+Important: this is a Node.js web app, not a static GitHub Pages site. GitHub stores the code. To use the live app with uploads, comments, bookmarks, and shared class data, run the server on a computer or deploy it to a Node-capable host.
+
 ## Current Version
 
 - Student accounts by name plus class invite code
@@ -21,35 +25,108 @@ A class-only resource sharing website for a small group of students.
 - Light/dark mode
 - No admin accounts or admin screens
 
+## Requirements
+
+- Node.js 18 or newer
+- A browser
+- Same Wi-Fi/network if classmates are connecting to your laptop
+
 ## Run Locally
 
-Double-click `run_class_hub.cmd`, or run:
+After cloning the repo:
 
 ```powershell
-$env:CLASS_CODE="GENWISE"
-$env:PORT="4173"
-& "$env:USERPROFILE\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe" server.js
+cd class-resource-hub
+npm start
 ```
 
-Open:
+Then open:
 
 ```text
 http://127.0.0.1:4173
 ```
 
-## Class Access
+On Windows, you can also double-click:
 
-For classmates on the same Wi-Fi, run with:
-
-```powershell
-$env:HOST="0.0.0.0"
-$env:CLASS_CODE="GENWISE"
-& "$env:USERPROFILE\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe" server.js
+```text
+run_class_hub.cmd
 ```
 
-Then share your computer's local network IP with the port, for example `http://192.168.1.10:4173`.
+## Share On Same Wi-Fi
 
-For real online hosting, the app can be deployed for free later, but you will need at least one free hosting account.
+On Windows, double-click:
+
+```text
+run_network_hub.cmd
+```
+
+Or run:
+
+```powershell
+$env:CLASS_CODE="GENWISE"
+$env:HOST="0.0.0.0"
+$env:PORT="4173"
+npm start
+```
+
+Then find your computer's IPv4 address:
+
+```powershell
+ipconfig
+```
+
+Share this style of link with classmates:
+
+```text
+http://YOUR-IPV4-ADDRESS:4173
+```
+
+Example:
+
+```text
+http://10.39.2.40:4173
+```
+
+## Configuration
+
+These environment variables are optional:
+
+```text
+CLASS_CODE=GENWISE
+HOST=127.0.0.1
+PORT=4173
+MAX_BODY_BYTES=83886080
+```
+
+Use `HOST=0.0.0.0` when sharing on Wi-Fi.
+
+## Data Storage
+
+The app creates its own local database at:
+
+```text
+data/db.json
+```
+
+Uploaded files are stored in:
+
+```text
+uploads/
+```
+
+These files are intentionally ignored by Git so private class data is not pushed to GitHub.
+
+## Troubleshooting
+
+- If classmates cannot open the app, make sure the server is running and use `run_network_hub.cmd`.
+- If the link says "refused to connect", restart the server.
+- If Windows Firewall asks about Node.js, allow it on private networks.
+- If classmates are on a different Wi-Fi or hotspot, the local network link will not work.
+- If the laptop sleeps or shuts down, the app goes offline until the server is started again.
+
+## Online Hosting
+
+This app can be hosted online on a Node-capable platform. GitHub Pages alone is not enough because this app needs a server for uploads, comments, and the shared database.
 
 ## Future Ideas To Approve First
 
