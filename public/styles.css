@@ -259,6 +259,20 @@ select:focus {
   align-items: center;
 }
 
+.sync-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
 .quick-stats {
   display: grid;
   grid-template-columns: repeat(4, minmax(140px, 1fr));

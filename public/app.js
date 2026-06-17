@@ -6,6 +6,8 @@ let activeSearch = "";
 let activeType = "all";
 let activeFolder = "all";
 let toastTimer = null;
+let autoRefreshTimer = null;
+let lastSyncAt = null;
 
 const icons = {
   file: "File",
@@ -47,7 +49,46 @@ async function api(path, options = {}) {
 
 async function refresh() {
   state = await api("/api/state");
+  lastSyncAt = new Date();
   renderDashboardData();
+}
+
+function canAutoRefresh() {
+  if (!state?.user || document.hidden) return false;
+  if ([...document.querySelectorAll("dialog")].some((dialog) => dialog.open)) return false;
+  const active = document.activeElement;
+  if (!active) return true;
+  return !active.matches("input, textarea, select, button, [contenteditable='true']");
+}
+
+function startAutoRefresh() {
+  stopAutoRefresh();
+  autoRefreshTimer = setInterval(async () => {
+    if (!canAutoRefresh()) return;
+    try {
+      await refresh();
+    } catch {
+      updateSyncStatus("Trying to reconnect");
+    }
+  }, 4000);
+  updateSyncStatus("Live sync on");
+}
+
+function stopAutoRefresh() {
+  if (autoRefreshTimer) clearInterval(autoRefreshTimer);
+  autoRefreshTimer = null;
+}
+
+function updateSyncStatus(message = "") {
+  const status = document.querySelector("#sync-status");
+  if (!status) return;
+  if (message) {
+    status.textContent = message;
+    return;
+  }
+  status.textContent = lastSyncAt
+    ? `Synced ${lastSyncAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`
+    : "Live sync on";
 }
 
 function dateLabel(iso) {
@@ -108,6 +149,7 @@ async function boot() {
 }
 
 function renderSignin() {
+  stopAutoRefresh();
   app.replaceChildren(template("#signin-template"));
   document.querySelector("#signin-form").addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -131,7 +173,9 @@ function renderSignin() {
 function renderDashboard() {
   app.replaceChildren(template("#dashboard-template"));
   wireDashboardEvents();
+  lastSyncAt = new Date();
   renderDashboardData();
+  startAutoRefresh();
 }
 
 function wireDashboardEvents() {
@@ -140,6 +184,7 @@ function wireDashboardEvents() {
     applyTheme(currentTheme() === "dark" ? "light" : "dark");
   });
   document.querySelector("#logout-btn").addEventListener("click", async () => {
+    stopAutoRefresh();
     await api("/api/logout", { method: "POST", body: {} });
     state = null;
     showToast("Signed out.");
@@ -189,6 +234,7 @@ function renderDashboardData() {
   renderResources();
   renderRequests();
   renderAnnouncements();
+  updateSyncStatus();
 }
 
 function renderFolders() {

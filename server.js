@@ -350,7 +350,7 @@ function serveFile(res, filePath, downloadName) {
     const ext = path.extname(filePath).toLowerCase();
     const headers = {
       "Content-Type": MIME_TYPES[ext] || "application/octet-stream",
-      "Cache-Control": "private, max-age=3600",
+      "Cache-Control": "no-store",
       "Content-Length": content.length,
     };
     if (downloadName) {
