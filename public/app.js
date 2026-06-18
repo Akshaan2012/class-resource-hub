@@ -261,6 +261,7 @@ function renderDashboardData() {
   document.querySelector("#stat-requests").textContent = state.requests.filter((item) => !item.fulfilled).length;
   document.querySelector("#stat-completion").textContent = `${insights.completionRate || 0}%`;
   renderFocus();
+  renderCampers();
   renderChat();
   renderFolders();
   renderFilterOptions();
@@ -281,6 +282,23 @@ function renderFocus() {
     ? `${openRequests} camp request${openRequests === 1 ? "" : "s"} need attention`
     : "Camp resources are caught up";
   document.querySelector("#focus-subtitle").textContent = `${camp.memberCount || 0} of ${camp.memberLimit || 11} campers have joined. The hub has ${state.resources.length} resources, ${pinned} pinned, ${state.chatMessages?.length || 0} chat messages, and ${state.comments.length} resource comments.`;
+}
+
+function renderCampers() {
+  const campers = state.campers || [];
+  const camp = state.camp || { memberCount: campers.length, memberLimit: 11 };
+  const count = document.querySelector("#camper-count");
+  const list = document.querySelector("#camper-list");
+  if (count) count.textContent = `${camp.memberCount || campers.length}/${camp.memberLimit || 11}`;
+  if (!list) return;
+  list.innerHTML = campers.length
+    ? campers.map((camper) => `
+      <article class="camper-pill">
+        <span>${camper.number}</span>
+        <strong>${escapeHtml(camper.name || "Camper")}</strong>
+      </article>
+    `).join("")
+    : '<p class="subtle">No campers have joined yet.</p>';
 }
 
 function renderFolders() {

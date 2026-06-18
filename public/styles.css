@@ -497,6 +497,13 @@ select:focus {
   gap: 12px;
 }
 
+@media (min-width: 1280px) {
+  .resource-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+}
+
 .resource-card,
 .side-panel {
   border: 1px solid var(--line);
@@ -705,6 +712,44 @@ select:focus {
 .chat-panel {
   display: grid;
   gap: 10px;
+}
+
+.camper-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.camper-pill {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 8px;
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+
+.camper-pill span {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--surface);
+  font-size: 0.74rem;
+  font-weight: 950;
+}
+
+.camper-pill strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 0.86rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .chat-list {

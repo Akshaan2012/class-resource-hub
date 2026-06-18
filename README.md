@@ -12,6 +12,8 @@ Important: this is a Node.js web app, not a static GitHub Pages site. GitHub sto
 - Default invite code: `GENWISE`
 - Private localhost prototype mode on `127.0.0.1:4174`
 - Camp chatbox for quick coordination
+- Two-column camper list showing who has joined
+- Two-column resource grid on wide screens to reduce scrolling
 - Upload downloadable files
 - Share text notes, prompts, and links
 - Organize resources by subject, unit/chapter, teacher, semester, and tags

@@ -330,6 +330,13 @@ function decorate(db, user) {
       memberLimit: 11,
       memberCount: db.users.length,
     },
+    campers: db.users
+      .slice()
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+      .map((camper, index) => ({
+        ...publicUser(camper),
+        number: index + 1,
+      })),
     folders: db.folders
       .slice()
       .sort((a, b) => a.name.localeCompare(b.name))
