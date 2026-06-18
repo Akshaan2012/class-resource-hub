@@ -464,7 +464,7 @@ function resourceCard(resource) {
   const tagHtml = (resource.tags || []).map((tag) => `<span class="tag">#${escapeHtml(tag)}</span>`).join("");
   const preview = previewHtml(resource);
   const fileMeta = resource.type === "file" ? `${escapeHtml(resource.fileName || "file")} ${resource.fileSize ? `| ${fileSize(resource.fileSize)}` : ""}` : "";
-  const canModerateResource = resource.isMine || state.user.isAdmin;
+  const canModerateResource = resource.source !== "supabase" && (resource.isMine || state.user.isAdmin);
   const editActions = canModerateResource
     ? `<button class="action-btn" data-action="edit" data-id="${resource.id}" type="button">Edit</button>
        <button class="action-btn danger-btn" data-action="delete" data-id="${resource.id}" type="button">Delete</button>`
@@ -514,6 +514,9 @@ function resourceCard(resource) {
 
 function mainAction(resource) {
   if (resource.type === "file") {
+    if (resource.source === "supabase" && resource.url) {
+      return `<a class="action-btn link-action" href="${escapeHtml(resource.url)}" target="_blank" rel="noopener noreferrer">Open</a>`;
+    }
     return `<a class="action-btn link-action" href="/api/download/${resource.id}">Download</a>`;
   }
   if (resource.type === "link") {

@@ -3,6 +3,7 @@ node_modules/
 .env
 .DS_Store
 Thumbs.db
+supabase-student-env-handoff.md
 
 data/*.json
 uploads/*

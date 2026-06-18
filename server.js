@@ -27,6 +27,10 @@ const ADMIN_NAMES = String(process.env.ADMIN_NAMES || "Akshaan")
   .split(",")
   .map((name) => name.trim().toLowerCase())
   .filter(Boolean);
+const APP_SLUG = process.env.VITE_APP_SLUG || process.env.APP_SLUGS || "akshaan-class-resource-hub";
+const SUPABASE_URL = String(process.env.SUPABASE_URL || "").replace(/\/+$/, "");
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || "";
+const SUPABASE_STORAGE_BUCKET = process.env.SUPABASE_STORAGE_BUCKET || "class-resources";
 const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, "public");
 const DATA_DIR = process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : path.join(ROOT, "data");
@@ -323,7 +327,139 @@ function normalizeTags(tags) {
     .slice(0, 12))];
 }
 
-function decorate(db, user) {
+function supabaseEnabled() {
+  return Boolean(SUPABASE_URL && SUPABASE_ANON_KEY && APP_SLUG);
+}
+
+function supabaseHeaders(extra = {}) {
+  return {
+    apikey: SUPABASE_ANON_KEY,
+    Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+    ...extra,
+  };
+}
+
+async function supabaseRequest(pathValue, options = {}) {
+  if (!supabaseEnabled()) return { data: null, error: "Supabase is not configured." };
+  try {
+    const response = await fetch(`${SUPABASE_URL}${pathValue}`, {
+      ...options,
+      headers: supabaseHeaders(options.headers || {}),
+    });
+    const text = await response.text();
+    const data = text ? JSON.parse(text) : null;
+    if (!response.ok) return { data, error: data?.message || data?.error || response.statusText, status: response.status };
+    return { data, error: null, status: response.status };
+  } catch (error) {
+    return { data: null, error: error.message };
+  }
+}
+
+function mapSupabaseResource(row) {
+  const metadata = row.metadata && typeof row.metadata === "object" ? row.metadata : {};
+  const type = row.resource_type === "link" ? "link" : row.resource_type === "file" ? "file" : "text";
+  const resource = {
+    id: `sb_${row.id}`,
+    supabaseId: row.id,
+    source: "supabase",
+    type,
+    title: row.title || "Untitled resource",
+    subject: metadata.subject || "General",
+    unit: metadata.unit || "",
+    teacher: metadata.teacher || "",
+    semester: metadata.semester || "",
+    description: row.description || "",
+    tags: Array.isArray(row.tags) ? row.tags : [],
+    content: row.content_text || "",
+    url: row.link_url || "",
+    filePath: row.storage_path || "",
+    fileName: row.file_name || "",
+    fileSize: row.file_size_bytes || 0,
+    mime: row.file_mime_type || "",
+    pinned: Boolean(metadata.pinned),
+    authorId: `supabase:${row.author_name || "Camper"}`,
+    createdAt: row.created_at || now(),
+    updatedAt: row.updated_at || row.created_at || now(),
+    author: { id: `supabase:${row.author_name || "Camper"}`, name: row.author_name || "Camper" },
+    isMine: false,
+    bookmarked: false,
+    helpfulByMe: false,
+    helpfulCount: 0,
+    commentCount: 0,
+  };
+  if (type === "file" && row.storage_path) {
+    resource.url = `${SUPABASE_URL}/storage/v1/object/public/${row.storage_bucket || SUPABASE_STORAGE_BUCKET}/${row.storage_path}`;
+  }
+  return resource;
+}
+
+async function fetchSupabaseResources() {
+  if (!supabaseEnabled()) return { resources: [], status: "not_configured" };
+  const query = `/rest/v1/resources?select=*&app_slug=eq.${encodeURIComponent(APP_SLUG)}&order=created_at.desc`;
+  const result = await supabaseRequest(query);
+  if (result.error) return { resources: [], status: "error", error: result.error };
+  return { resources: (result.data || []).map(mapSupabaseResource), status: "connected" };
+}
+
+async function uploadSupabaseFile(resource, file) {
+  if (!file?.data) return null;
+  const originalName = sanitizeName(file.name || resource.title);
+  const storedPath = `${APP_SLUG}/${resource.id}-${originalName}`;
+  const buffer = Buffer.from(String(file.data || ""), "base64");
+  const response = await fetch(`${SUPABASE_URL}/storage/v1/object/${SUPABASE_STORAGE_BUCKET}/${encodeURIComponent(storedPath).replace(/%2F/g, "/")}`, {
+    method: "POST",
+    headers: supabaseHeaders({
+      "Content-Type": file.mime || "application/octet-stream",
+      "x-upsert": "false",
+    }),
+    body: buffer,
+  });
+  if (!response.ok) return null;
+  return { path: storedPath, size: buffer.length, name: originalName, mime: file.mime || "application/octet-stream" };
+}
+
+async function mirrorResourceToSupabase(resource, user, file = null) {
+  if (!supabaseEnabled()) return { ok: false, skipped: true };
+  let storage = null;
+  if (resource.type === "file" && file?.data) {
+    storage = await uploadSupabaseFile(resource, file);
+  }
+  const row = {
+    app_slug: APP_SLUG,
+    title: resource.title,
+    description: resource.description || "",
+    resource_type: resource.type === "prompt" ? "text" : resource.type,
+    content_text: resource.type === "text" || resource.type === "prompt" ? resource.content || "" : null,
+    link_url: resource.type === "link" ? resource.url : null,
+    storage_bucket: SUPABASE_STORAGE_BUCKET,
+    storage_path: storage?.path || null,
+    file_name: storage?.name || resource.fileName || null,
+    file_mime_type: storage?.mime || resource.mime || null,
+    file_size_bytes: storage?.size || resource.fileSize || null,
+    author_name: user.name,
+    tags: resource.tags || [],
+    metadata: {
+      local_id: resource.id,
+      type: resource.type,
+      subject: resource.subject,
+      unit: resource.unit,
+      teacher: resource.teacher,
+      semester: resource.semester,
+      pinned: resource.pinned,
+    },
+  };
+  const result = await supabaseRequest("/rest/v1/resources", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Prefer: "return=minimal",
+    },
+    body: JSON.stringify(row),
+  });
+  return { ok: !result.error, error: result.error };
+}
+
+async function decorate(db, user) {
   const usersById = new Map(db.users.map((item) => [item.id, publicUser(item)]));
   const commentCount = new Map();
   for (const comment of db.comments) {
@@ -351,9 +487,32 @@ function decorate(db, user) {
     }
   }
 
+  const supabase = await fetchSupabaseResources();
+  const localResources = db.resources
+    .slice()
+    .sort((a, b) => Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)) || b.createdAt.localeCompare(a.createdAt))
+    .map((resource) => ({
+      ...resource,
+      source: "local",
+      author: usersById.get(resource.authorId) || { id: resource.authorId, name: "Classmate" },
+      isMine: resource.authorId === user.id,
+      bookmarked: bookmarks.has(resource.id),
+      helpfulByMe: helpfulByMe.has(resource.id),
+      helpfulCount: helpfulCount.get(resource.id) || 0,
+      commentCount: commentCount.get(resource.id) || 0,
+    }));
+
   return {
     user: publicUser(user),
     classCode: CLASS_CODE,
+    supabase: {
+      enabled: supabaseEnabled(),
+      status: supabase.status,
+      error: supabase.error || "",
+      appSlug: APP_SLUG,
+      bucket: SUPABASE_STORAGE_BUCKET,
+      resourceCount: supabase.resources.length,
+    },
     camp: {
       name: "Camp Resource Hub",
       memberLimit: 11,
@@ -377,18 +536,8 @@ function decorate(db, user) {
         resourceCount: resourceCountByFolder.get(folderKey(folder.name)) || 0,
         openRequestCount: openRequestCountByFolder.get(folderKey(folder.name)) || 0,
       })),
-    resources: db.resources
-      .slice()
-      .sort((a, b) => Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)) || b.createdAt.localeCompare(a.createdAt))
-      .map((resource) => ({
-        ...resource,
-        author: usersById.get(resource.authorId) || { id: resource.authorId, name: "Classmate" },
-        isMine: resource.authorId === user.id,
-        bookmarked: bookmarks.has(resource.id),
-        helpfulByMe: helpfulByMe.has(resource.id),
-        helpfulCount: helpfulCount.get(resource.id) || 0,
-        commentCount: commentCount.get(resource.id) || 0,
-      })),
+    resources: [...localResources, ...supabase.resources]
+      .sort((a, b) => Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)) || b.createdAt.localeCompare(a.createdAt)),
     comments: db.comments.map((comment) => ({
       ...comment,
       author: usersById.get(comment.authorId) || { id: comment.authorId, name: "Classmate" },
@@ -608,7 +757,7 @@ async function handleApi(req, res, reqUrl) {
         json(res, 200, { user: null, classCode: CLASS_CODE });
         return;
       }
-      json(res, 200, decorate(db, session.user));
+      json(res, 200, await decorate(db, session.user));
       return;
     }
 
@@ -633,7 +782,7 @@ async function handleApi(req, res, reqUrl) {
       db.sessions[token] = { userId: user.id, createdAt: now() };
       writeDb(db);
       setSessionCookie(res, token);
-      json(res, 200, decorate(db, user));
+      json(res, 200, await decorate(db, user));
       return;
     }
 
@@ -666,7 +815,7 @@ async function handleApi(req, res, reqUrl) {
     if (!user) return;
 
     if (route === "GET /api/state") {
-      json(res, 200, decorate(db, user));
+      json(res, 200, await decorate(db, user));
       return;
     }
 
@@ -694,7 +843,7 @@ async function handleApi(req, res, reqUrl) {
       for (const filePath of filePaths) {
         if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
       }
-      json(res, 200, decorate(db, user));
+      json(res, 200, await decorate(db, user));
       return;
     }
 
@@ -712,7 +861,7 @@ async function handleApi(req, res, reqUrl) {
         return;
       }
       writeDb(db);
-      json(res, 201, decorate(db, user));
+      json(res, 201, await decorate(db, user));
       return;
     }
 
@@ -788,7 +937,8 @@ async function handleApi(req, res, reqUrl) {
 
       db.resources.push(resource);
       writeDb(db);
-      json(res, 201, decorate(db, user));
+      await mirrorResourceToSupabase(resource, user, payload.file || null);
+      json(res, 201, await decorate(db, user));
       return;
     }
 
@@ -838,7 +988,7 @@ async function handleApi(req, res, reqUrl) {
       }
       resource.updatedAt = now();
       writeDb(db);
-      json(res, 200, decorate(db, user));
+      json(res, 200, await decorate(db, user));
       return;
     }
 
@@ -855,7 +1005,7 @@ async function handleApi(req, res, reqUrl) {
       const filePath = deleteResourceRecord(db, resource);
       writeDb(db);
       if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
-      json(res, 200, decorate(db, user));
+      json(res, 200, await decorate(db, user));
       return;
     }
 
@@ -873,7 +1023,7 @@ async function handleApi(req, res, reqUrl) {
       }
       db.comments.push({ id: id("com"), resourceId: resource.id, authorId: user.id, body, createdAt: now() });
       writeDb(db);
-      json(res, 201, decorate(db, user));
+      json(res, 201, await decorate(db, user));
       return;
     }
 
@@ -890,7 +1040,7 @@ async function handleApi(req, res, reqUrl) {
       }
       db.comments = db.comments.filter((item) => item.id !== comment.id);
       writeDb(db);
-      json(res, 200, decorate(db, user));
+      json(res, 200, await decorate(db, user));
       return;
     }
 
@@ -907,7 +1057,7 @@ async function handleApi(req, res, reqUrl) {
         createdAt: now(),
       });
       writeDb(db);
-      json(res, 201, decorate(db, user));
+      json(res, 201, await decorate(db, user));
       return;
     }
 
@@ -924,7 +1074,7 @@ async function handleApi(req, res, reqUrl) {
       }
       db.chatMessages = db.chatMessages.filter((item) => item.id !== message.id);
       writeDb(db);
-      json(res, 200, decorate(db, user));
+      json(res, 200, await decorate(db, user));
       return;
     }
 
@@ -940,7 +1090,7 @@ async function handleApi(req, res, reqUrl) {
       else current.add(resource.id);
       db.bookmarks[user.id] = [...current];
       writeDb(db);
-      json(res, 200, decorate(db, user));
+      json(res, 200, await decorate(db, user));
       return;
     }
 
@@ -956,7 +1106,7 @@ async function handleApi(req, res, reqUrl) {
       else current.add(resource.id);
       db.helpfulVotes[user.id] = [...current];
       writeDb(db);
-      json(res, 200, decorate(db, user));
+      json(res, 200, await decorate(db, user));
       return;
     }
 
@@ -981,7 +1131,7 @@ async function handleApi(req, res, reqUrl) {
         createdAt: now(),
       });
       writeDb(db);
-      json(res, 201, decorate(db, user));
+      json(res, 201, await decorate(db, user));
       return;
     }
 
@@ -998,7 +1148,7 @@ async function handleApi(req, res, reqUrl) {
       }
       request.fulfilled = Boolean((await readJson(req)).fulfilled);
       writeDb(db);
-      json(res, 200, decorate(db, user));
+      json(res, 200, await decorate(db, user));
       return;
     }
 
@@ -1014,7 +1164,7 @@ async function handleApi(req, res, reqUrl) {
       }
       db.requests = db.requests.filter((item) => item.id !== request.id);
       writeDb(db);
-      json(res, 200, decorate(db, user));
+      json(res, 200, await decorate(db, user));
       return;
     }
 
@@ -1026,7 +1176,7 @@ async function handleApi(req, res, reqUrl) {
       }
       db.announcements.push({ id: id("ann"), text, authorId: user.id, createdAt: now() });
       writeDb(db);
-      json(res, 201, decorate(db, user));
+      json(res, 201, await decorate(db, user));
       return;
     }
 
@@ -1043,7 +1193,7 @@ async function handleApi(req, res, reqUrl) {
       }
       db.announcements = db.announcements.filter((item) => item.id !== announcement.id);
       writeDb(db);
-      json(res, 200, decorate(db, user));
+      json(res, 200, await decorate(db, user));
       return;
     }
 
