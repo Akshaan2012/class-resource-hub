@@ -9,6 +9,7 @@ Important: this is a Node.js web app, not a static GitHub Pages site. GitHub sto
 ## Current Version
 
 - Camper accounts by name plus invite code
+- Akshaan-only admin mode for kicking campers and moderating posts
 - Default invite code: `GENWISE`
 - Private localhost prototype mode on `127.0.0.1:4174`
 - Camp chatbox for quick coordination

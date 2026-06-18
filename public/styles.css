@@ -529,7 +529,7 @@ select:focus {
 
 .camper-directory-item {
   display: grid;
-  grid-template-columns: 28px minmax(0, 1fr);
+  grid-template-columns: 28px minmax(0, 1fr) auto;
   column-gap: 8px;
   align-items: center;
 }
@@ -831,7 +831,7 @@ select:focus {
 
 .camper-pill {
   display: grid;
-  grid-template-columns: 26px minmax(0, 1fr);
+  grid-template-columns: 26px minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
   min-height: 42px;
@@ -859,6 +859,27 @@ select:focus {
   font-size: 0.86rem;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.camper-pill em,
+.camper-directory-item em {
+  justify-self: start;
+  color: var(--teal-dark);
+  font-size: 0.72rem;
+  font-style: normal;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.kick-btn {
+  min-height: 28px;
+  border: 1px solid color-mix(in srgb, var(--danger) 38%, var(--line));
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--danger) 9%, var(--surface));
+  color: var(--danger);
+  padding: 0 8px;
+  font-size: 0.74rem;
+  font-weight: 950;
 }
 
 .chat-list {

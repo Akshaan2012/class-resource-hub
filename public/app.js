@@ -251,6 +251,8 @@ function wireDashboardEvents() {
   document.querySelector("#request-list").addEventListener("click", handleRequestClick);
   document.querySelector("#announcement-list").addEventListener("click", handleAnnouncementClick);
   document.querySelector("#chat-list").addEventListener("click", handleChatClick);
+  document.querySelector("#camper-list").addEventListener("click", handleCamperAdminClick);
+  document.querySelector("#camper-directory").addEventListener("click", handleCamperAdminClick);
 }
 
 function renderDashboardData() {
@@ -281,8 +283,10 @@ function renderFocus() {
   const camp = state.camp || { memberCount: 0, memberLimit: 11 };
   document.querySelector("#focus-title").textContent = openRequests
     ? `${openRequests} camp request${openRequests === 1 ? "" : "s"} need attention`
-    : "Camp resources are caught up";
-  document.querySelector("#focus-subtitle").textContent = `${camp.memberCount || 0} of ${camp.memberLimit || 11} campers have joined. The hub has ${state.resources.length} resources, ${pinned} pinned, ${state.chatMessages?.length || 0} chat messages, and ${state.comments.length} resource comments.`;
+    : state.user.isAdmin
+      ? "Admin mode is on for Akshaan"
+      : "Camp resources are caught up";
+  document.querySelector("#focus-subtitle").textContent = `${camp.memberCount || 0} of ${camp.memberLimit || 11} campers have joined. The hub has ${state.resources.length} resources, ${pinned} pinned, ${state.chatMessages?.length || 0} chat messages, and ${state.comments.length} resource comments.${state.user.isAdmin ? " You can remove campers and moderate posts." : ""}`;
 }
 
 function renderCampers() {
@@ -297,6 +301,8 @@ function renderCampers() {
       <article class="camper-pill">
         <span>${camper.number}</span>
         <strong>${escapeHtml(camper.name || "Camper")}</strong>
+        ${camper.isAdmin ? '<em>Admin</em>' : ""}
+        ${state.user.isAdmin && !camper.isSelf && !camper.isAdmin ? `<button class="kick-btn" data-action="kick-camper" data-id="${camper.id}" type="button">Kick</button>` : ""}
       </article>
     `).join("")
     : '<p class="subtle">No campers have joined yet.</p>';
@@ -345,6 +351,8 @@ function renderCamperDirectory() {
         <span>${camper.number}</span>
         <strong>${escapeHtml(camper.name || "Camper")}</strong>
         <small>Joined ${dateLabel(camper.createdAt)}</small>
+        ${camper.isAdmin ? '<em>Admin</em>' : ""}
+        ${state.user.isAdmin && !camper.isSelf && !camper.isAdmin ? `<button class="kick-btn" data-action="kick-camper" data-id="${camper.id}" type="button">Kick</button>` : ""}
       </article>
     `).join("")
     : '<p class="subtle">Camper usernames will appear here after they join.</p>';
@@ -456,7 +464,8 @@ function resourceCard(resource) {
   const tagHtml = (resource.tags || []).map((tag) => `<span class="tag">#${escapeHtml(tag)}</span>`).join("");
   const preview = previewHtml(resource);
   const fileMeta = resource.type === "file" ? `${escapeHtml(resource.fileName || "file")} ${resource.fileSize ? `| ${fileSize(resource.fileSize)}` : ""}` : "";
-  const editActions = resource.isMine
+  const canModerateResource = resource.isMine || state.user.isAdmin;
+  const editActions = canModerateResource
     ? `<button class="action-btn" data-action="edit" data-id="${resource.id}" type="button">Edit</button>
        <button class="action-btn danger-btn" data-action="delete" data-id="${resource.id}" type="button">Delete</button>`
     : "";
@@ -532,7 +541,7 @@ function commentHtml(comment) {
         <span class="subtle"> | ${dateLabel(comment.createdAt)}</span>
         <p>${escapeHtml(comment.body)}</p>
       </div>
-      ${comment.isMine ? `<button class="action-btn danger-btn" data-action="delete-comment" data-id="${comment.id}" type="button">Delete</button>` : ""}
+      ${comment.isMine || state.user.isAdmin ? `<button class="action-btn danger-btn" data-action="delete-comment" data-id="${comment.id}" type="button">Delete</button>` : ""}
     </div>
   `;
 }
@@ -590,7 +599,7 @@ function renderChat() {
           <span>${dateLabel(message.createdAt)}</span>
         </div>
         <p>${escapeHtml(message.body)}</p>
-        ${message.isMine ? `<button class="chat-delete" data-action="delete-chat" data-id="${message.id}" type="button">Delete</button>` : ""}
+        ${message.isMine || state.user.isAdmin ? `<button class="chat-delete" data-action="delete-chat" data-id="${message.id}" type="button">Delete</button>` : ""}
       </article>
     `).join("")
     : '<p class="subtle">No camp messages yet.</p>';
@@ -628,7 +637,7 @@ function renderRequests() {
           ${request.details ? `<p>${escapeHtml(request.details)}</p>` : ""}
           <div class="request-actions">
             <span class="pill ${request.fulfilled ? "" : "type-pill"}">${request.fulfilled ? "Fulfilled" : "Open"}</span>
-            ${request.isMine ? `
+            ${request.isMine || state.user.isAdmin ? `
               <span>
                 <button class="action-btn" data-action="toggle-request" data-id="${request.id}" data-fulfilled="${request.fulfilled ? "false" : "true"}" type="button">${request.fulfilled ? "Reopen" : "Done"}</button>
                 <button class="action-btn danger-btn" data-action="delete-request" data-id="${request.id}" type="button">Delete</button>
@@ -648,7 +657,7 @@ function renderAnnouncements() {
       <article class="mini-item">
         <p>${escapeHtml(announcement.text)}</p>
         <p>${escapeHtml(announcement.author?.name || "Class Hub")} | ${dateLabel(announcement.createdAt)}</p>
-        ${announcement.isMine ? `<button class="action-btn danger-btn" data-action="delete-announcement" data-id="${announcement.id}" type="button">Delete</button>` : ""}
+        ${announcement.isMine || state.user.isAdmin ? `<button class="action-btn danger-btn" data-action="delete-announcement" data-id="${announcement.id}" type="button">Delete</button>` : ""}
       </article>
     `).join("")
     : '<p class="subtle">No announcements yet.</p>';
@@ -888,6 +897,22 @@ async function handleChatClick(event) {
   if (!button) return;
   try {
     state = await api(`/api/chat/${button.dataset.id}`, { method: "DELETE", body: {} });
+    renderDashboardData();
+  } catch (error) {
+    showToast(error.message);
+  }
+}
+
+async function handleCamperAdminClick(event) {
+  const button = event.target.closest("[data-action='kick-camper']");
+  if (!button) return;
+  if (!state.user.isAdmin) return;
+  const camper = (state.campers || []).find((item) => item.id === button.dataset.id);
+  if (!camper) return;
+  if (!confirm(`Remove ${camper.name} from the camp hub? Their posts and messages will be removed too.`)) return;
+  try {
+    state = await api(`/api/campers/${camper.id}`, { method: "DELETE", body: {} });
+    showToast(`${camper.name} was removed.`);
     renderDashboardData();
   } catch (error) {
     showToast(error.message);

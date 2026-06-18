@@ -23,6 +23,10 @@ loadEnvFile(path.join(__dirname, ".env"));
 const HOST = process.env.HOST || "127.0.0.1";
 const PORT = Number(process.env.PORT || 4173);
 const CLASS_CODE = process.env.CLASS_CODE || "GENWISE";
+const ADMIN_NAMES = String(process.env.ADMIN_NAMES || "Akshaan")
+  .split(",")
+  .map((name) => name.trim().toLowerCase())
+  .filter(Boolean);
 const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, "public");
 const DATA_DIR = process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : path.join(ROOT, "data");
@@ -176,7 +180,16 @@ function publicUser(user) {
     id: user.id,
     name: user.name,
     createdAt: user.createdAt,
+    isAdmin: isAdmin(user),
   };
+}
+
+function isAdmin(user) {
+  return Boolean(user && ADMIN_NAMES.includes(String(user.name || "").trim().toLowerCase()));
+}
+
+function canModerate(user, ownerId) {
+  return isAdmin(user) || ownerId === user.id;
 }
 
 function getSession(req, db) {
@@ -352,6 +365,7 @@ function decorate(db, user) {
       .map((camper, index) => ({
         ...publicUser(camper),
         number: index + 1,
+        isSelf: camper.id === user.id,
       })),
     folders: db.folders
       .slice()
@@ -505,6 +519,44 @@ function resourceForDownload(resource) {
   return safeJoin(UPLOAD_DIR, resource.filePath);
 }
 
+function deleteResourceRecord(db, resource) {
+  const filePath = resourceForDownload(resource);
+  db.resources = db.resources.filter((item) => item.id !== resource.id);
+  db.comments = db.comments.filter((item) => item.resourceId !== resource.id);
+  for (const userId of Object.keys(db.bookmarks)) {
+    db.bookmarks[userId] = (db.bookmarks[userId] || []).filter((idValue) => idValue !== resource.id);
+  }
+  for (const userId of Object.keys(db.helpfulVotes)) {
+    db.helpfulVotes[userId] = (db.helpfulVotes[userId] || []).filter((idValue) => idValue !== resource.id);
+  }
+  return filePath;
+}
+
+function kickCamper(db, camperId) {
+  const filePaths = [];
+  for (const resource of db.resources.filter((item) => item.authorId === camperId)) {
+    const filePath = deleteResourceRecord(db, resource);
+    if (filePath) filePaths.push(filePath);
+  }
+  db.users = db.users.filter((item) => item.id !== camperId);
+  db.comments = db.comments.filter((item) => item.authorId !== camperId);
+  db.chatMessages = db.chatMessages.filter((item) => item.authorId !== camperId);
+  db.requests = db.requests.filter((item) => item.authorId !== camperId);
+  db.announcements = db.announcements.filter((item) => item.authorId !== camperId);
+  delete db.bookmarks[camperId];
+  delete db.helpfulVotes[camperId];
+  for (const token of Object.keys(db.sessions)) {
+    if (db.sessions[token]?.userId === camperId) delete db.sessions[token];
+  }
+  for (const userId of Object.keys(db.bookmarks)) {
+    db.bookmarks[userId] = (db.bookmarks[userId] || []).filter((resourceId) => db.resources.some((resource) => resource.id === resourceId));
+  }
+  for (const userId of Object.keys(db.helpfulVotes)) {
+    db.helpfulVotes[userId] = (db.helpfulVotes[userId] || []).filter((resourceId) => db.resources.some((resource) => resource.id === resourceId));
+  }
+  return filePaths;
+}
+
 function serveFile(res, filePath, downloadName) {
   fs.readFile(filePath, (error, content) => {
     if (error) {
@@ -618,6 +670,34 @@ async function handleApi(req, res, reqUrl) {
       return;
     }
 
+    const camperDelete = reqUrl.pathname.match(/^\/api\/campers\/([^/]+)$/);
+    if (camperDelete && req.method === "DELETE") {
+      if (!isAdmin(user)) {
+        fail(res, 403, "Only Akshaan can remove campers.");
+        return;
+      }
+      const camper = db.users.find((item) => item.id === camperDelete[1]);
+      if (!camper) {
+        fail(res, 404, "Camper not found.");
+        return;
+      }
+      if (camper.id === user.id) {
+        fail(res, 400, "You cannot remove yourself.");
+        return;
+      }
+      if (isAdmin(camper)) {
+        fail(res, 403, "Admin camper cannot be removed.");
+        return;
+      }
+      const filePaths = kickCamper(db, camper.id);
+      writeDb(db);
+      for (const filePath of filePaths) {
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      }
+      json(res, 200, decorate(db, user));
+      return;
+    }
+
     if (route === "POST /api/folders") {
       const payload = await readJson(req);
       const name = normalizeFolderName(payload.name);
@@ -720,8 +800,8 @@ async function handleApi(req, res, reqUrl) {
         fail(res, 404, "Resource not found.");
         return;
       }
-      if (resource.authorId !== user.id) {
-        fail(res, 403, "Only the student who uploaded this can edit it.");
+      if (!canModerate(user, resource.authorId)) {
+        fail(res, 403, "Only the camper who uploaded this or Akshaan can edit it.");
         return;
       }
       const title = String(payload.title || "").trim().slice(0, 120);
@@ -768,19 +848,11 @@ async function handleApi(req, res, reqUrl) {
         fail(res, 404, "Resource not found.");
         return;
       }
-      if (resource.authorId !== user.id) {
-        fail(res, 403, "Only the student who uploaded this can delete it.");
+      if (!canModerate(user, resource.authorId)) {
+        fail(res, 403, "Only the camper who uploaded this or Akshaan can delete it.");
         return;
       }
-      const filePath = resourceForDownload(resource);
-      db.resources = db.resources.filter((item) => item.id !== resource.id);
-      db.comments = db.comments.filter((item) => item.resourceId !== resource.id);
-      for (const userId of Object.keys(db.bookmarks)) {
-        db.bookmarks[userId] = db.bookmarks[userId].filter((idValue) => idValue !== resource.id);
-      }
-      for (const userId of Object.keys(db.helpfulVotes)) {
-        db.helpfulVotes[userId] = db.helpfulVotes[userId].filter((idValue) => idValue !== resource.id);
-      }
+      const filePath = deleteResourceRecord(db, resource);
       writeDb(db);
       if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
       json(res, 200, decorate(db, user));
@@ -812,8 +884,8 @@ async function handleApi(req, res, reqUrl) {
         fail(res, 404, "Comment not found.");
         return;
       }
-      if (comment.authorId !== user.id) {
-        fail(res, 403, "Only the student who wrote this comment can delete it.");
+      if (!canModerate(user, comment.authorId)) {
+        fail(res, 403, "Only the camper who wrote this comment or Akshaan can delete it.");
         return;
       }
       db.comments = db.comments.filter((item) => item.id !== comment.id);
@@ -846,8 +918,8 @@ async function handleApi(req, res, reqUrl) {
         fail(res, 404, "Message not found.");
         return;
       }
-      if (message.authorId !== user.id) {
-        fail(res, 403, "Only the camper who wrote this message can delete it.");
+      if (!canModerate(user, message.authorId)) {
+        fail(res, 403, "Only the camper who wrote this message or Akshaan can delete it.");
         return;
       }
       db.chatMessages = db.chatMessages.filter((item) => item.id !== message.id);
@@ -920,8 +992,8 @@ async function handleApi(req, res, reqUrl) {
         fail(res, 404, "Request not found.");
         return;
       }
-      if (request.authorId !== user.id) {
-        fail(res, 403, "Only the student who made this request can update it.");
+      if (!canModerate(user, request.authorId)) {
+        fail(res, 403, "Only the camper who made this request or Akshaan can update it.");
         return;
       }
       request.fulfilled = Boolean((await readJson(req)).fulfilled);
@@ -936,8 +1008,8 @@ async function handleApi(req, res, reqUrl) {
         fail(res, 404, "Request not found.");
         return;
       }
-      if (request.authorId !== user.id) {
-        fail(res, 403, "Only the student who made this request can delete it.");
+      if (!canModerate(user, request.authorId)) {
+        fail(res, 403, "Only the camper who made this request or Akshaan can delete it.");
         return;
       }
       db.requests = db.requests.filter((item) => item.id !== request.id);
@@ -965,8 +1037,8 @@ async function handleApi(req, res, reqUrl) {
         fail(res, 404, "Announcement not found.");
         return;
       }
-      if (announcement.authorId !== user.id) {
-        fail(res, 403, "Only the student who posted this announcement can delete it.");
+      if (!canModerate(user, announcement.authorId)) {
+        fail(res, 403, "Only the camper who posted this announcement or Akshaan can delete it.");
         return;
       }
       db.announcements = db.announcements.filter((item) => item.id !== announcement.id);
