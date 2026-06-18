@@ -51,6 +51,14 @@ function defaultDb() {
     ],
     resources: [],
     comments: [],
+    chatMessages: [
+      {
+        id: id("chat"),
+        body: "Welcome to the camp hub. Use this chat for quick resource asks, reminders, and coordination.",
+        createdAt: now(),
+        authorId: "system",
+      },
+    ],
     requests: [],
     announcements: [
       {
@@ -222,7 +230,7 @@ function ensureFolder(db, name, authorId = "system") {
 
 function ensureDbShape(db) {
   let changed = false;
-  for (const key of ["users", "resources", "comments", "requests", "announcements"]) {
+  for (const key of ["users", "resources", "comments", "chatMessages", "requests", "announcements"]) {
     if (!Array.isArray(db[key])) {
       db[key] = [];
       changed = true;
@@ -317,6 +325,11 @@ function decorate(db, user) {
   return {
     user: publicUser(user),
     classCode: CLASS_CODE,
+    camp: {
+      name: "Camp Resource Hub",
+      memberLimit: 11,
+      memberCount: db.users.length,
+    },
     folders: db.folders
       .slice()
       .sort((a, b) => a.name.localeCompare(b.name))
@@ -344,6 +357,15 @@ function decorate(db, user) {
       author: usersById.get(comment.authorId) || { id: comment.authorId, name: "Classmate" },
       isMine: comment.authorId === user.id,
     })),
+    chatMessages: db.chatMessages
+      .slice()
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+      .slice(-80)
+      .map((message) => ({
+        ...message,
+        author: usersById.get(message.authorId) || { id: message.authorId, name: "Camp Hub" },
+        isMine: message.authorId === user.id,
+      })),
     requests: db.requests
       .slice()
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
@@ -404,6 +426,15 @@ function buildInsights(db, helpfulCount) {
       createdAt: announcement.createdAt,
     });
   }
+  for (const message of db.chatMessages) {
+    recentActivity.push({
+      id: message.id,
+      type: "chat",
+      title: message.body.slice(0, 90),
+      subject: "Camp Chat",
+      createdAt: message.createdAt,
+    });
+  }
 
   const totalResources = db.resources.length;
   const openRequests = db.requests.filter((request) => !request.fulfilled).length;
@@ -419,6 +450,9 @@ function buildInsights(db, helpfulCount) {
     openRequests,
     fulfilledRequests,
     pinnedResources,
+    chatMessages: db.chatMessages.length,
+    memberCount: db.users.length,
+    memberLimit: 11,
     completionRate: totalRequests ? Math.round((fulfilledRequests / totalRequests) * 100) : 0,
     subjectCount: subjectCount.size,
     topTags: [...tagCount.entries()]
@@ -760,6 +794,40 @@ async function handleApi(req, res, reqUrl) {
         return;
       }
       db.comments = db.comments.filter((item) => item.id !== comment.id);
+      writeDb(db);
+      json(res, 200, decorate(db, user));
+      return;
+    }
+
+    if (route === "POST /api/chat") {
+      const body = String((await readJson(req)).body || "").trim().slice(0, 1000);
+      if (!body) {
+        fail(res, 400, "Message cannot be empty.");
+        return;
+      }
+      db.chatMessages.push({
+        id: id("chat"),
+        body,
+        authorId: user.id,
+        createdAt: now(),
+      });
+      writeDb(db);
+      json(res, 201, decorate(db, user));
+      return;
+    }
+
+    const chatDelete = reqUrl.pathname.match(/^\/api\/chat\/([^/]+)$/);
+    if (chatDelete && req.method === "DELETE") {
+      const message = db.chatMessages.find((item) => item.id === chatDelete[1]);
+      if (!message) {
+        fail(res, 404, "Message not found.");
+        return;
+      }
+      if (message.authorId !== user.id) {
+        fail(res, 403, "Only the camper who wrote this message can delete it.");
+        return;
+      }
+      db.chatMessages = db.chatMessages.filter((item) => item.id !== message.id);
       writeDb(db);
       json(res, 200, decorate(db, user));
       return;

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Class Resource Hub</title>
+  <title>Camp Resource Hub</title>
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
@@ -13,9 +13,9 @@
   <template id="signin-template">
     <section class="signin-layout">
       <div class="signin-copy">
-        <p class="eyebrow">Private class workspace</p>
-        <h1>Class Resource Hub</h1>
-        <p class="hero-subtitle">A focused study space for resources, requests, announcements, comments, bookmarks, and class knowledge.</p>
+        <p class="eyebrow">Private camp workspace</p>
+        <h1>Camp Resource Hub</h1>
+        <p class="hero-subtitle">A focused space for 11 campers to share resources, chat, ask for help, post reminders, and keep useful links in one place.</p>
         <form id="signin-form" class="signin-form">
           <label>
             <span>Your name</span>
@@ -31,8 +31,8 @@
       <div class="signin-visual">
         <img class="hero-image" src="/assets/study-hub-hero.png" alt="Study desk with a laptop and resource cards">
         <div class="visual-stat">
-          <strong>Local first</strong>
-          <span>Supabase-ready private build</span>
+          <strong>11-person camp</strong>
+          <span>Private localhost prototype</span>
         </div>
       </div>
     </section>
@@ -44,7 +44,7 @@
         <div class="brand-block">
           <span class="brand-mark" aria-hidden="true">CR</span>
           <div>
-            <p class="eyebrow">Class Resource Hub</p>
+            <p class="eyebrow">Camp Resource Hub</p>
             <h1 id="welcome-title"></h1>
           </div>
         </div>
@@ -57,13 +57,13 @@
 
       <section class="focus-band">
         <div>
-          <p class="eyebrow">Student dashboard</p>
-          <h2 id="focus-title">Build the class knowledge base</h2>
+          <p class="eyebrow">Camp dashboard</p>
+          <h2 id="focus-title">Build the camp knowledge base</h2>
           <p id="focus-subtitle"></p>
         </div>
         <div class="focus-actions">
           <button id="new-resource-btn" class="primary-btn" type="button">Add Resource</button>
-          <button id="new-request-btn" class="ghost-btn" type="button">Ask Class</button>
+          <button id="new-request-btn" class="ghost-btn" type="button">Ask Camp</button>
         </div>
       </section>
 
@@ -73,8 +73,8 @@
           <span>Resources</span>
         </div>
         <div>
-          <strong id="stat-subjects">0</strong>
-          <span>Subjects</span>
+          <strong id="stat-members">0/11</strong>
+          <span>Campers</span>
         </div>
         <div>
           <strong id="stat-requests">0</strong>
@@ -140,9 +140,21 @@
         </section>
 
         <aside class="side-column">
+          <section class="side-panel chat-panel">
+            <div class="panel-heading">
+              <h2>Camp Chat</h2>
+              <span class="mini-count">11 people</span>
+            </div>
+            <div id="chat-list" class="chat-list"></div>
+            <form id="chat-form" class="chat-form">
+              <input name="body" placeholder="Message the camp" maxlength="1000" required>
+              <button class="primary-btn compact" type="submit">Send</button>
+            </form>
+          </section>
+
           <section class="side-panel">
             <div class="panel-heading">
-              <h2>Class Pulse</h2>
+              <h2>Camp Pulse</h2>
             </div>
             <div id="pulse-list" class="pulse-list"></div>
           </section>

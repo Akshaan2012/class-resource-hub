@@ -235,6 +235,7 @@ function wireDashboardEvents() {
   document.querySelector("#folder-form").addEventListener("submit", saveFolder);
   document.querySelector("#request-form").addEventListener("submit", saveRequest);
   document.querySelector("#announcement-form").addEventListener("submit", saveAnnouncement);
+  document.querySelector("#chat-form").addEventListener("submit", saveChatMessage);
 
   document.querySelectorAll("[data-close-dialog]").forEach((button) => {
     button.addEventListener("click", () => button.closest("dialog").close());
@@ -249,15 +250,18 @@ function wireDashboardEvents() {
   document.querySelector("#resource-list").addEventListener("submit", handleCommentSubmit);
   document.querySelector("#request-list").addEventListener("click", handleRequestClick);
   document.querySelector("#announcement-list").addEventListener("click", handleAnnouncementClick);
+  document.querySelector("#chat-list").addEventListener("click", handleChatClick);
 }
 
 function renderDashboardData() {
   const insights = state.insights || {};
+  const camp = state.camp || { memberCount: insights.memberCount || 0, memberLimit: 11 };
   document.querySelector("#stat-resources").textContent = state.resources.length;
-  document.querySelector("#stat-subjects").textContent = insights.subjectCount || state.folders.length;
+  document.querySelector("#stat-members").textContent = `${camp.memberCount || 0}/${camp.memberLimit || 11}`;
   document.querySelector("#stat-requests").textContent = state.requests.filter((item) => !item.fulfilled).length;
   document.querySelector("#stat-completion").textContent = `${insights.completionRate || 0}%`;
   renderFocus();
+  renderChat();
   renderFolders();
   renderFilterOptions();
   renderInsights();
@@ -272,10 +276,11 @@ function renderDashboardData() {
 function renderFocus() {
   const openRequests = state.requests.filter((request) => !request.fulfilled).length;
   const pinned = state.resources.filter((resource) => resource.pinned).length;
+  const camp = state.camp || { memberCount: 0, memberLimit: 11 };
   document.querySelector("#focus-title").textContent = openRequests
-    ? `${openRequests} open request${openRequests === 1 ? "" : "s"} need attention`
-    : "Class resources are caught up";
-  document.querySelector("#focus-subtitle").textContent = `${state.resources.length} resources, ${pinned} pinned, ${state.comments.length} comments, and ${state.resources.filter((item) => item.bookmarked).length} bookmarks in your private local hub.`;
+    ? `${openRequests} camp request${openRequests === 1 ? "" : "s"} need attention`
+    : "Camp resources are caught up";
+  document.querySelector("#focus-subtitle").textContent = `${camp.memberCount || 0} of ${camp.memberLimit || 11} campers have joined. The hub has ${state.resources.length} resources, ${pinned} pinned, ${state.chatMessages?.length || 0} chat messages, and ${state.comments.length} resource comments.`;
 }
 
 function renderFolders() {
@@ -492,6 +497,8 @@ function renderPulse() {
   const insights = state.insights || {};
   const bookmarks = state.resources.filter((resource) => resource.bookmarked).length;
   const items = [
+    ["Campers joined", `${insights.memberCount || state.camp?.memberCount || 0}/${insights.memberLimit || state.camp?.memberLimit || 11}`],
+    ["Chat messages", state.chatMessages?.length || 0],
     ["Pinned resources", insights.pinnedResources || 0],
     ["Saved by you", bookmarks],
     ["Fulfilled requests", insights.fulfilledRequests || 0],
@@ -503,6 +510,24 @@ function renderPulse() {
       <span>${label}</span>
     </div>
   `).join("");
+}
+
+function renderChat() {
+  const list = document.querySelector("#chat-list");
+  const messages = state.chatMessages || [];
+  list.innerHTML = messages.length
+    ? messages.map((message) => `
+      <article class="chat-message ${message.isMine ? "is-mine" : ""}">
+        <div>
+          <strong>${escapeHtml(message.author?.name || "Camper")}</strong>
+          <span>${dateLabel(message.createdAt)}</span>
+        </div>
+        <p>${escapeHtml(message.body)}</p>
+        ${message.isMine ? `<button class="chat-delete" data-action="delete-chat" data-id="${message.id}" type="button">Delete</button>` : ""}
+      </article>
+    `).join("")
+    : '<p class="subtle">No camp messages yet.</p>';
+  list.scrollTop = list.scrollHeight;
 }
 
 function renderActivity() {
@@ -769,6 +794,33 @@ async function handleCommentSubmit(event) {
       body: { body },
     });
     form.reset();
+    renderDashboardData();
+  } catch (error) {
+    showToast(error.message);
+  }
+}
+
+async function saveChatMessage(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const body = form.elements.body.value;
+  try {
+    state = await api("/api/chat", {
+      method: "POST",
+      body: { body },
+    });
+    form.reset();
+    renderDashboardData();
+  } catch (error) {
+    showToast(error.message);
+  }
+}
+
+async function handleChatClick(event) {
+  const button = event.target.closest("[data-action='delete-chat']");
+  if (!button) return;
+  try {
+    state = await api(`/api/chat/${button.dataset.id}`, { method: "DELETE", body: {} });
     renderDashboardData();
   } catch (error) {
     showToast(error.message);

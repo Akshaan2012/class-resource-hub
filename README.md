@@ -1,6 +1,6 @@
-# Class Resource Hub
+# Camp Resource Hub
 
-A class-only resource sharing website for a small group of students.
+A private resource sharing and chat website for an 11-person camp group.
 
 GitHub repo: https://github.com/Akshaan2012/class-resource-hub
 
@@ -8,9 +8,10 @@ Important: this is a Node.js web app, not a static GitHub Pages site. GitHub sto
 
 ## Current Version
 
-- Student accounts by name plus class invite code
+- Camper accounts by name plus invite code
 - Default invite code: `GENWISE`
 - Private localhost prototype mode on `127.0.0.1:4174`
+- Camp chatbox for quick coordination
 - Upload downloadable files
 - Share text notes, prompts, and links
 - Organize resources by subject, unit/chapter, teacher, semester, and tags
@@ -23,7 +24,7 @@ Important: this is a Node.js web app, not a static GitHub Pages site. GitHub sto
 - Comments under resources
 - Resource requests
 - Pinned resources
-- Helpful marks and class pulse insights
+- Helpful marks and camp pulse insights
 - Recent activity and top subject/tag panels
 - Announcements
 - Bookmarks
