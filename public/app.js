@@ -464,11 +464,12 @@ function resourceCard(resource) {
   const tagHtml = (resource.tags || []).map((tag) => `<span class="tag">#${escapeHtml(tag)}</span>`).join("");
   const preview = previewHtml(resource);
   const fileMeta = resource.type === "file" ? `${escapeHtml(resource.fileName || "file")} ${resource.fileSize ? `| ${fileSize(resource.fileSize)}` : ""}` : "";
-  const canModerateResource = resource.source !== "supabase" && (resource.isMine || state.user.isAdmin);
-  const editActions = canModerateResource
-    ? `<button class="action-btn" data-action="edit" data-id="${resource.id}" type="button">Edit</button>
-       <button class="action-btn danger-btn" data-action="delete" data-id="${resource.id}" type="button">Delete</button>`
-    : "";
+  const canEditResource = resource.source !== "supabase" && (resource.isMine || state.user.isAdmin);
+  const canDeleteResource = resource.isMine || state.user.isAdmin;
+  const editActions = [
+    canEditResource ? `<button class="action-btn" data-action="edit" data-id="${resource.id}" type="button">Edit</button>` : "",
+    canDeleteResource ? `<button class="action-btn danger-btn" data-action="delete" data-id="${resource.id}" type="button">Delete</button>` : "",
+  ].join("");
   const metaItems = [
     ["Subject", resource.subject || "General"],
     ["Unit", resource.unit],

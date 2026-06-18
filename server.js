@@ -94,6 +94,9 @@ function defaultDb() {
     ],
     bookmarks: {},
     helpfulVotes: {},
+    deletedSupabaseResourceIds: [],
+    deletedSupabaseLocalIds: [],
+    deletedSupabaseStoragePaths: [],
   };
 }
 
@@ -196,6 +199,14 @@ function canModerate(user, ownerId) {
   return isAdmin(user) || ownerId === user.id;
 }
 
+function sameName(a, b) {
+  return String(a || "").trim().toLowerCase() === String(b || "").trim().toLowerCase();
+}
+
+function canModerateSupabaseResource(user, resource) {
+  return isAdmin(user) || sameName(user?.name, resource?.author?.name);
+}
+
 function getSession(req, db) {
   const cookie = req.headers.cookie || "";
   const match = cookie.match(/(?:^|;\s*)classHubSession=([^;]+)/);
@@ -284,6 +295,12 @@ function ensureDbShape(db) {
   if (!Array.isArray(db.folders)) {
     db.folders = [];
     changed = true;
+  }
+  for (const key of ["deletedSupabaseResourceIds", "deletedSupabaseLocalIds", "deletedSupabaseStoragePaths"]) {
+    if (!Array.isArray(db[key])) {
+      db[key] = [];
+      changed = true;
+    }
   }
 
   const before = db.folders.length;
@@ -376,6 +393,7 @@ function mapSupabaseResource(row) {
     fileName: row.file_name || "",
     fileSize: row.file_size_bytes || 0,
     mime: row.file_mime_type || "",
+    localId: metadata.local_id || "",
     pinned: Boolean(metadata.pinned),
     authorId: `supabase:${row.author_name || "Camper"}`,
     createdAt: row.created_at || now(),
@@ -399,6 +417,44 @@ async function fetchSupabaseResources() {
   const result = await supabaseRequest(query);
   if (result.error) return { resources: [], status: "error", error: result.error };
   return { resources: (result.data || []).map(mapSupabaseResource), status: "connected" };
+}
+
+async function deleteSupabaseResource(resource) {
+  if (!supabaseEnabled()) return { ok: false, error: "Supabase is not configured." };
+  const deleteQuery = `/rest/v1/resources?id=eq.${encodeURIComponent(resource.supabaseId)}&app_slug=eq.${encodeURIComponent(APP_SLUG)}`;
+  const result = await supabaseRequest(deleteQuery, {
+    method: "DELETE",
+    headers: { Prefer: "return=minimal" },
+  });
+  if (result.error) return { ok: false, error: result.error };
+  if (resource.filePath) {
+    const encodedPath = encodeURIComponent(resource.filePath).replace(/%2F/g, "/");
+    await fetch(`${SUPABASE_URL}/storage/v1/object/${SUPABASE_STORAGE_BUCKET}/${encodedPath}`, {
+      method: "DELETE",
+      headers: supabaseHeaders(),
+    }).catch(() => null);
+  }
+  return { ok: true };
+}
+
+function rememberDeletedSupabaseResource(db, resource) {
+  if (!resource) return;
+  const addUnique = (key, value) => {
+    if (!value) return;
+    if (!Array.isArray(db[key])) db[key] = [];
+    if (!db[key].includes(value)) db[key].push(value);
+  };
+  addUnique("deletedSupabaseResourceIds", resource.supabaseId);
+  addUnique("deletedSupabaseLocalIds", resource.localId);
+  addUnique("deletedSupabaseStoragePaths", resource.filePath);
+}
+
+function isDeletedSupabaseResource(db, resource) {
+  return (
+    db.deletedSupabaseResourceIds.includes(resource.supabaseId) ||
+    (resource.localId && db.deletedSupabaseLocalIds.includes(resource.localId)) ||
+    (resource.filePath && db.deletedSupabaseStoragePaths.includes(resource.filePath))
+  );
 }
 
 async function uploadSupabaseFile(resource, file) {
@@ -488,6 +544,14 @@ async function decorate(db, user) {
   }
 
   const supabase = await fetchSupabaseResources();
+  const localResourceIds = new Set(db.resources.map((resource) => resource.id));
+  const supabaseResources = supabase.resources
+    .filter((resource) => !isDeletedSupabaseResource(db, resource))
+    .filter((resource) => !(resource.localId && localResourceIds.has(resource.localId)))
+    .map((resource) => ({
+      ...resource,
+      isMine: sameName(resource.author?.name, user.name),
+    }));
   const localResources = db.resources
     .slice()
     .sort((a, b) => Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)) || b.createdAt.localeCompare(a.createdAt))
@@ -511,7 +575,7 @@ async function decorate(db, user) {
       error: supabase.error || "",
       appSlug: APP_SLUG,
       bucket: SUPABASE_STORAGE_BUCKET,
-      resourceCount: supabase.resources.length,
+      resourceCount: supabaseResources.length,
     },
     camp: {
       name: "Camp Resource Hub",
@@ -536,7 +600,7 @@ async function decorate(db, user) {
         resourceCount: resourceCountByFolder.get(folderKey(folder.name)) || 0,
         openRequestCount: openRequestCountByFolder.get(folderKey(folder.name)) || 0,
       })),
-    resources: [...localResources, ...supabase.resources]
+    resources: [...localResources, ...supabaseResources]
       .sort((a, b) => Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)) || b.createdAt.localeCompare(a.createdAt)),
     comments: db.comments.map((comment) => ({
       ...comment,
@@ -1071,6 +1135,37 @@ async function handleApi(req, res, reqUrl) {
     }
 
     if (resourceMatch && req.method === "DELETE") {
+      if (resourceMatch[1].startsWith("sb_")) {
+        const supabase = await fetchSupabaseResources();
+        const resource = supabase.resources.find((item) => item.id === resourceMatch[1]);
+        if (!resource) {
+          fail(res, 404, "Supabase resource not found.");
+          return;
+        }
+        if (!canModerateSupabaseResource(user, resource)) {
+          fail(res, 403, "Only the camper who uploaded this or Akshaan can delete it.");
+          return;
+        }
+        const result = await deleteSupabaseResource(resource);
+        rememberDeletedSupabaseResource(db, resource);
+        db.comments = db.comments.filter((item) => item.resourceId !== resource.id);
+        for (const userId of Object.keys(db.bookmarks)) {
+          db.bookmarks[userId] = (db.bookmarks[userId] || []).filter((idValue) => idValue !== resource.id);
+        }
+        for (const userId of Object.keys(db.helpfulVotes)) {
+          db.helpfulVotes[userId] = (db.helpfulVotes[userId] || []).filter((idValue) => idValue !== resource.id);
+        }
+        if (resource.localId) {
+          const localResource = db.resources.find((item) => item.id === resource.localId);
+          if (localResource && canModerate(user, localResource.authorId)) {
+            const filePath = deleteResourceRecord(db, localResource);
+            if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
+          }
+        }
+        writeDb(db);
+        json(res, 200, { ...(await decorate(db, user)), supabaseDeleteError: result.ok ? "" : result.error });
+        return;
+      }
       const resource = db.resources.find((item) => item.id === resourceMatch[1]);
       if (!resource) {
         fail(res, 404, "Resource not found.");
@@ -1079,6 +1174,12 @@ async function handleApi(req, res, reqUrl) {
       if (!canModerate(user, resource.authorId)) {
         fail(res, 403, "Only the camper who uploaded this or Akshaan can delete it.");
         return;
+      }
+      const supabase = await fetchSupabaseResources();
+      const mirroredResources = supabase.resources.filter((item) => item.localId === resource.id);
+      for (const mirroredResource of mirroredResources) {
+        await deleteSupabaseResource(mirroredResource);
+        rememberDeletedSupabaseResource(db, mirroredResource);
       }
       const filePath = deleteResourceRecord(db, resource);
       writeDb(db);
