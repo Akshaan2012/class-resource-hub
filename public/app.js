@@ -262,6 +262,7 @@ function renderDashboardData() {
   document.querySelector("#stat-completion").textContent = `${insights.completionRate || 0}%`;
   renderFocus();
   renderCampers();
+  renderQuickFind();
   renderChat();
   renderFolders();
   renderFilterOptions();
@@ -299,6 +300,54 @@ function renderCampers() {
       </article>
     `).join("")
     : '<p class="subtle">No campers have joined yet.</p>';
+}
+
+function renderQuickFind() {
+  renderResourceDirectory();
+  renderCamperDirectory();
+}
+
+function renderResourceDirectory() {
+  const list = document.querySelector("#directory-list");
+  if (!list) return;
+  const resources = state.resources.slice(0, 10);
+  list.innerHTML = resources.length
+    ? resources.map((resource) => {
+      const details = [
+        resource.subject || "General",
+        resource.unit,
+        resource.teacher,
+        resource.semester,
+      ].filter(Boolean).join(" | ");
+      return `
+        <article class="directory-item">
+          <span class="pill type-pill">${icons[resource.type] || "Resource"}</span>
+          <div>
+            <h3>${escapeHtml(resource.title)}</h3>
+            <p>${escapeHtml(details || "General")} | ${escapeHtml(resource.author?.name || "Camper")}</p>
+          </div>
+        </article>
+      `;
+    }).join("")
+    : '<p class="subtle">Resources will appear here as campers add them.</p>';
+}
+
+function renderCamperDirectory() {
+  const campers = state.campers || [];
+  const camp = state.camp || { memberCount: campers.length, memberLimit: 11 };
+  const count = document.querySelector("#directory-camper-count");
+  const list = document.querySelector("#camper-directory");
+  if (count) count.textContent = `${camp.memberCount || campers.length}/${camp.memberLimit || 11}`;
+  if (!list) return;
+  list.innerHTML = campers.length
+    ? campers.map((camper) => `
+      <article class="camper-directory-item">
+        <span>${camper.number}</span>
+        <strong>${escapeHtml(camper.name || "Camper")}</strong>
+        <small>Joined ${dateLabel(camper.createdAt)}</small>
+      </article>
+    `).join("")
+    : '<p class="subtle">Camper usernames will appear here after they join.</p>';
 }
 
 function renderFolders() {
