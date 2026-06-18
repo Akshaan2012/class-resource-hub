@@ -1,12 +1,15 @@
 :root {
   color-scheme: light;
-  --bg: #f5f7fb;
-  --bg-soft: #edf7f3;
+  --bg: #eef4f8;
+  --bg-soft: #e7f5ef;
   --surface: #ffffff;
-  --surface-2: #f7fafc;
+  --surface-2: #f6f9fb;
+  --surface-glass: rgba(255, 255, 255, 0.86);
   --ink: #172033;
   --muted: #667085;
   --line: #d9e1ea;
+  --grid-line: rgba(23, 32, 51, 0.075);
+  --grid-strong: rgba(15, 159, 143, 0.11);
   --teal: #0f9f8f;
   --teal-dark: #087a70;
   --indigo: #4f46e5;
@@ -20,13 +23,16 @@
 
 [data-theme="dark"] {
   color-scheme: dark;
-  --bg: #11141b;
-  --bg-soft: #17241f;
-  --surface: #1b202b;
-  --surface-2: #202838;
+  --bg: #0d1118;
+  --bg-soft: #12221e;
+  --surface: #171d27;
+  --surface-2: #1e2633;
+  --surface-glass: rgba(23, 29, 39, 0.86);
   --ink: #f1f5f9;
   --muted: #a6b0bf;
   --line: #343c4d;
+  --grid-line: rgba(241, 245, 249, 0.065);
+  --grid-strong: rgba(53, 208, 190, 0.12);
   --teal: #35d0be;
   --teal-dark: #6ee7da;
   --indigo: #9b9af8;
@@ -44,10 +50,29 @@
 body {
   margin: 0;
   min-height: 100vh;
-  background: var(--bg);
+  background:
+    linear-gradient(115deg, color-mix(in srgb, var(--bg-soft) 68%, transparent), transparent 42%),
+    linear-gradient(245deg, color-mix(in srgb, var(--indigo) 10%, transparent), transparent 46%),
+    repeating-linear-gradient(90deg, transparent 0 31px, var(--grid-line) 31px 32px),
+    repeating-linear-gradient(0deg, transparent 0 31px, var(--grid-line) 31px 32px),
+    linear-gradient(135deg, transparent 0 46%, var(--grid-strong) 46% 46.35%, transparent 46.35% 100%),
+    var(--bg);
+  background-attachment: fixed;
   color: var(--ink);
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   letter-spacing: 0;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--surface) 28%, transparent), transparent 28%),
+    repeating-linear-gradient(135deg, transparent 0 72px, color-mix(in srgb, var(--teal) 8%, transparent) 72px 73px);
+  mask-image: linear-gradient(to bottom, black, transparent 78%);
 }
 
 button,
@@ -74,6 +99,7 @@ p {
 
 .app-shell {
   min-height: 100vh;
+  isolation: isolate;
 }
 
 .signin-layout {
@@ -138,8 +164,9 @@ h1 {
   padding: 14px;
   border: 1px solid rgba(255, 255, 255, 0.58);
   border-radius: var(--radius);
-  background: rgba(255, 255, 255, 0.9);
-  color: #172033;
+  background: var(--surface-glass);
+  color: var(--ink);
+  backdrop-filter: blur(16px);
   box-shadow: 0 16px 36px rgba(23, 32, 51, 0.18);
 }
 
@@ -148,7 +175,7 @@ h1 {
 }
 
 .visual-stat span {
-  color: #4b5563;
+  color: var(--muted);
   font-size: 0.86rem;
   font-weight: 750;
 }
@@ -328,9 +355,10 @@ select:focus {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background:
-    linear-gradient(120deg, rgba(15, 159, 143, 0.12), transparent 42%),
-    linear-gradient(240deg, rgba(79, 70, 229, 0.12), transparent 42%),
-    var(--surface);
+    linear-gradient(120deg, color-mix(in srgb, var(--teal) 15%, transparent), transparent 42%),
+    linear-gradient(240deg, color-mix(in srgb, var(--indigo) 13%, transparent), transparent 42%),
+    var(--surface-glass);
+  backdrop-filter: blur(16px);
   box-shadow: 0 14px 36px rgba(23, 32, 51, 0.08);
 }
 
@@ -366,7 +394,8 @@ select:focus {
   padding: 15px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  background: var(--surface);
+  background: var(--surface-glass);
+  backdrop-filter: blur(12px);
 }
 
 .quick-stats strong {
@@ -445,7 +474,8 @@ select:focus {
   padding: 14px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  background: var(--surface);
+  background: var(--surface-glass);
+  backdrop-filter: blur(12px);
   box-shadow: 0 10px 24px rgba(23, 32, 51, 0.05);
 }
 
@@ -585,7 +615,8 @@ select:focus {
 .side-panel {
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  background: var(--surface);
+  background: var(--surface-glass);
+  backdrop-filter: blur(12px);
   box-shadow: 0 10px 24px rgba(23, 32, 51, 0.05);
 }
 
