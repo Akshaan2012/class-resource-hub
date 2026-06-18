@@ -86,39 +86,41 @@
         </div>
       </section>
 
-      <section class="folder-section">
-        <div class="panel-heading">
-          <h2>Subjects</h2>
-          <button id="new-folder-btn" class="ghost-btn small" type="button">New Subject</button>
-        </div>
-        <div id="folder-list" class="folder-list"></div>
-      </section>
-
-      <section class="insight-strip" aria-label="Class insights">
-        <article>
-          <span>Top Tags</span>
-          <div id="top-tags" class="tag-row"></div>
-        </article>
-        <article>
-          <span>Leading Subjects</span>
-          <div id="top-subjects" class="meter-list"></div>
-        </article>
-        <article>
-          <span>Most Helpful</span>
-          <p id="top-resource" class="insight-copy"></p>
-        </article>
-      </section>
-
       <section class="workspace-grid">
-        <section class="main-column">
+        <aside class="left-column">
+          <section class="folder-section side-panel">
+            <div class="panel-heading">
+              <h2>Subjects</h2>
+              <button id="new-folder-btn" class="ghost-btn small" type="button">New Subject</button>
+            </div>
+            <div id="folder-list" class="folder-list"></div>
+          </section>
+
+          <section class="insight-strip" aria-label="Class insights">
+            <article>
+              <span>Top Tags</span>
+              <div id="top-tags" class="tag-row"></div>
+            </article>
+            <article>
+              <span>Leading Subjects</span>
+              <div id="top-subjects" class="meter-list"></div>
+            </article>
+            <article>
+              <span>Most Helpful</span>
+              <p id="top-resource" class="insight-copy"></p>
+            </article>
+          </section>
+
           <article class="directory-panel">
             <div class="panel-heading">
-              <h2>Find Resources</h2>
-              <span class="mini-count">Left column</span>
+              <h2>Resource Preview</h2>
+              <span class="mini-count">Latest</span>
             </div>
             <div id="directory-list" class="directory-list"></div>
           </article>
+        </aside>
 
+        <section class="main-column">
           <div class="toolbar">
             <div class="search-wrap">
               <span aria-hidden="true">S</span>

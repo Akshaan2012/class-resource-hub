@@ -279,7 +279,7 @@ select:focus {
 }
 
 .dashboard-shell {
-  width: min(1420px, calc(100% - 36px));
+  width: min(1660px, calc(100% - 36px));
   margin: 0 auto;
   padding: 24px 0 44px;
 }
@@ -413,10 +413,6 @@ select:focus {
   font-weight: 850;
 }
 
-.folder-section {
-  margin-bottom: 16px;
-}
-
 .folder-list {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
@@ -457,9 +453,8 @@ select:focus {
 
 .insight-strip {
   display: grid;
-  grid-template-columns: 1fr 1.15fr 1fr;
+  grid-template-columns: 1fr;
   gap: 12px;
-  margin-bottom: 16px;
 }
 
 .insight-copy {
@@ -549,20 +544,47 @@ select:focus {
 
 .workspace-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.25fr) minmax(360px, 0.75fr);
+  grid-template-columns: minmax(260px, 0.72fr) minmax(460px, 1.2fr) minmax(320px, 0.78fr);
   gap: 18px;
   align-items: start;
 }
 
+.left-column,
 .main-column {
   display: grid;
   gap: 14px;
 }
 
+.left-column,
 .main-column,
 .side-column,
 .side-panel {
   min-width: 0;
+}
+
+.left-column,
+.side-column {
+  position: sticky;
+  top: 12px;
+  align-self: start;
+  max-height: calc(100vh - 24px);
+  overflow: auto;
+  padding-right: 3px;
+}
+
+.left-column .folder-list {
+  grid-template-columns: 1fr;
+}
+
+.left-column .folder-card {
+  min-height: 64px;
+  padding: 12px;
+}
+
+.left-column .directory-list {
+  max-height: 360px;
+  overflow: auto;
+  padding-right: 3px;
 }
 
 .toolbar {
@@ -1172,13 +1194,22 @@ select:focus {
 
 @media (max-width: 1100px) {
   .signin-layout,
-  .workspace-grid,
-  .insight-strip {
+  .workspace-grid {
     grid-template-columns: 1fr;
   }
 
+  .left-column,
   .side-column {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    position: static;
+    max-height: none;
+    overflow: visible;
+    padding-right: 0;
+  }
+
+  .left-column .folder-section,
+  .left-column .directory-panel {
+    grid-row: span 2;
   }
 
   .toolbar {
@@ -1241,6 +1272,7 @@ select:focus {
   .meta-grid,
   .directory-list,
   .camper-directory,
+  .left-column,
   .side-column,
   .pulse-list {
     grid-template-columns: 1fr;
