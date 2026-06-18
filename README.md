@@ -10,16 +10,21 @@ Important: this is a Node.js web app, not a static GitHub Pages site. GitHub sto
 
 - Student accounts by name plus class invite code
 - Default invite code: `GENWISE`
+- Private localhost prototype mode on `127.0.0.1:4174`
 - Upload downloadable files
 - Share text notes, prompts, and links
+- Organize resources by subject, unit/chapter, teacher, semester, and tags
 - One-click copy for text and prompts
 - Links open in a new tab
 - Subject folders with resource and open-request counts
 - Tags, search, folder filters, and type filters
+- Unit, teacher, semester, and bookmark filters
 - Edit/delete your own resources
 - Comments under resources
 - Resource requests
 - Pinned resources
+- Helpful marks and class pulse insights
+- Recent activity and top subject/tag panels
 - Announcements
 - Bookmarks
 - Light/dark mode
@@ -44,6 +49,20 @@ Then open:
 
 ```text
 http://127.0.0.1:4173
+```
+
+## Private Prototype
+
+This branch has the newer student-focused prototype. It is private to your own computer when run with:
+
+```text
+run_private_prototype.cmd
+```
+
+Then open:
+
+```text
+http://127.0.0.1:4174
 ```
 
 On Windows, you can also double-click:
@@ -94,11 +113,17 @@ These environment variables are optional:
 ```text
 CLASS_CODE=GENWISE
 HOST=127.0.0.1
-PORT=4173
+PORT=4174
 MAX_BODY_BYTES=83886080
+SUPABASE_URL=
+SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+SUPABASE_STORAGE_BUCKET=class-resources
 ```
 
 Use `HOST=0.0.0.0` when sharing on Wi-Fi.
+
+Supabase is not connected yet. Add the project URL, anon key, and professor-provided schema details before switching the app from local JSON storage to Supabase.
 
 ## Data Storage
 

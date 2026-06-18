@@ -12,10 +12,10 @@
 
   <template id="signin-template">
     <section class="signin-layout">
-      <div class="hero-copy">
-        <p class="eyebrow">Class-only workspace</p>
+      <div class="signin-copy">
+        <p class="eyebrow">Private class workspace</p>
         <h1>Class Resource Hub</h1>
-        <p class="hero-subtitle">Files, prompts, links, notes, comments, requests, pins, bookmarks, and announcements for one class.</p>
+        <p class="hero-subtitle">A focused study space for resources, requests, announcements, comments, bookmarks, and class knowledge.</p>
         <form id="signin-form" class="signin-form">
           <label>
             <span>Your name</span>
@@ -28,23 +28,44 @@
           <button class="primary-btn" type="submit">Enter Hub</button>
         </form>
       </div>
-      <img class="hero-image" src="/assets/study-hub-hero.png" alt="Study desk with a laptop and floating resource cards">
+      <div class="signin-visual">
+        <img class="hero-image" src="/assets/study-hub-hero.png" alt="Study desk with a laptop and resource cards">
+        <div class="visual-stat">
+          <strong>Local first</strong>
+          <span>Supabase-ready private build</span>
+        </div>
+      </div>
     </section>
   </template>
 
   <template id="dashboard-template">
     <section class="dashboard-shell">
       <header class="topbar">
-        <div>
-          <p class="eyebrow">Class Resource Hub</p>
-          <h1 id="welcome-title"></h1>
+        <div class="brand-block">
+          <span class="brand-mark" aria-hidden="true">CR</span>
+          <div>
+            <p class="eyebrow">Class Resource Hub</p>
+            <h1 id="welcome-title"></h1>
+          </div>
         </div>
         <div class="topbar-actions">
           <span id="sync-status" class="sync-status">Live sync on</span>
-          <button id="theme-toggle" class="icon-btn" type="button" title="Toggle dark mode" aria-label="Toggle dark mode">T</button>
+          <button id="theme-toggle" class="icon-btn" type="button" title="Toggle theme" aria-label="Toggle theme">T</button>
           <button id="logout-btn" class="ghost-btn" type="button">Sign Out</button>
         </div>
       </header>
+
+      <section class="focus-band">
+        <div>
+          <p class="eyebrow">Student dashboard</p>
+          <h2 id="focus-title">Build the class knowledge base</h2>
+          <p id="focus-subtitle"></p>
+        </div>
+        <div class="focus-actions">
+          <button id="new-resource-btn" class="primary-btn" type="button">Add Resource</button>
+          <button id="new-request-btn" class="ghost-btn" type="button">Ask Class</button>
+        </div>
+      </section>
 
       <section class="quick-stats" aria-label="Class hub summary">
         <div>
@@ -52,25 +73,40 @@
           <span>Resources</span>
         </div>
         <div>
-          <strong id="stat-bookmarks">0</strong>
-          <span>Bookmarks</span>
+          <strong id="stat-subjects">0</strong>
+          <span>Subjects</span>
         </div>
         <div>
           <strong id="stat-requests">0</strong>
-          <span>Requests</span>
+          <span>Open Requests</span>
         </div>
         <div>
-          <strong id="stat-code"></strong>
-          <span>Invite Code</span>
+          <strong id="stat-completion">0%</strong>
+          <span>Request Completion</span>
         </div>
       </section>
 
       <section class="folder-section">
         <div class="panel-heading">
-          <h2>Subject Folders</h2>
-          <button id="new-folder-btn" class="ghost-btn small" type="button">New Folder</button>
+          <h2>Subjects</h2>
+          <button id="new-folder-btn" class="ghost-btn small" type="button">New Subject</button>
         </div>
         <div id="folder-list" class="folder-list"></div>
+      </section>
+
+      <section class="insight-strip" aria-label="Class insights">
+        <article>
+          <span>Top Tags</span>
+          <div id="top-tags" class="tag-row"></div>
+        </article>
+        <article>
+          <span>Leading Subjects</span>
+          <div id="top-subjects" class="meter-list"></div>
+        </article>
+        <article>
+          <span>Most Helpful</span>
+          <p id="top-resource" class="insight-copy"></p>
+        </article>
       </section>
 
       <section class="workspace-grid">
@@ -78,7 +114,7 @@
           <div class="toolbar">
             <div class="search-wrap">
               <span aria-hidden="true">S</span>
-              <input id="search-input" type="search" placeholder="Search title, subject, tag, text">
+              <input id="search-input" type="search" placeholder="Search title, unit, teacher, tag, text">
             </div>
             <select id="type-filter" aria-label="Filter by type">
               <option value="all">All types</option>
@@ -88,7 +124,15 @@
               <option value="link">Links</option>
               <option value="bookmarks">Bookmarks</option>
             </select>
-            <button id="new-resource-btn" class="primary-btn compact" type="button">Add Resource</button>
+            <select id="unit-filter" aria-label="Filter by unit">
+              <option value="all">All units</option>
+            </select>
+            <select id="teacher-filter" aria-label="Filter by teacher">
+              <option value="all">All teachers</option>
+            </select>
+            <select id="semester-filter" aria-label="Filter by semester">
+              <option value="all">All semesters</option>
+            </select>
           </div>
 
           <div id="resource-list" class="resource-list"></div>
@@ -98,8 +142,15 @@
         <aside class="side-column">
           <section class="side-panel">
             <div class="panel-heading">
+              <h2>Class Pulse</h2>
+            </div>
+            <div id="pulse-list" class="pulse-list"></div>
+          </section>
+
+          <section class="side-panel">
+            <div class="panel-heading">
               <h2>Requests</h2>
-              <button id="new-request-btn" class="ghost-btn small" type="button">Ask</button>
+              <button id="side-request-btn" class="ghost-btn small" type="button">Ask</button>
             </div>
             <div id="request-list" class="stack-list"></div>
           </section>
@@ -110,6 +161,13 @@
               <button id="new-announcement-btn" class="ghost-btn small" type="button">Post</button>
             </div>
             <div id="announcement-list" class="stack-list"></div>
+          </section>
+
+          <section class="side-panel">
+            <div class="panel-heading">
+              <h2>Recent Activity</h2>
+            </div>
+            <div id="activity-list" class="stack-list"></div>
           </section>
         </aside>
       </section>
@@ -134,8 +192,22 @@
             <input name="title" required maxlength="120">
           </label>
           <label>
-            <span>Subject Folder</span>
+            <span>Subject</span>
             <select name="subject"></select>
+          </label>
+        </div>
+        <div class="form-grid three">
+          <label>
+            <span>Unit / Chapter</span>
+            <input name="unit" maxlength="80" placeholder="Unit 2, Chapter 4">
+          </label>
+          <label>
+            <span>Teacher</span>
+            <input name="teacher" maxlength="80" placeholder="Prof. Sharma">
+          </label>
+          <label>
+            <span>Semester</span>
+            <input name="semester" maxlength="40" placeholder="Sem 3">
           </label>
         </div>
         <label>
@@ -179,10 +251,26 @@
           <span>What do you need?</span>
           <input name="title" required maxlength="120">
         </label>
-        <label>
-          <span>Subject Folder</span>
-          <select name="subject"></select>
-        </label>
+        <div class="form-grid">
+          <label>
+            <span>Subject</span>
+            <select name="subject"></select>
+          </label>
+          <label>
+            <span>Unit / Chapter</span>
+            <input name="unit" maxlength="80">
+          </label>
+        </div>
+        <div class="form-grid">
+          <label>
+            <span>Teacher</span>
+            <input name="teacher" maxlength="80">
+          </label>
+          <label>
+            <span>Semester</span>
+            <input name="semester" maxlength="40">
+          </label>
+        </div>
         <label>
           <span>Details</span>
           <textarea name="details" rows="5" maxlength="1000"></textarea>
@@ -214,16 +302,16 @@
     <dialog id="folder-dialog" class="modal">
       <form id="folder-form" method="dialog" class="modal-content">
         <div class="modal-heading">
-          <h2>New Subject Folder</h2>
+          <h2>New Subject</h2>
           <button class="icon-btn" value="cancel" type="button" data-close-dialog aria-label="Close">x</button>
         </div>
         <label>
-          <span>Folder name</span>
+          <span>Subject name</span>
           <input name="name" required maxlength="60" placeholder="Economics">
         </label>
         <div class="modal-actions">
           <button class="ghost-btn" type="button" data-close-dialog>Cancel</button>
-          <button class="primary-btn" type="submit">Create Folder</button>
+          <button class="primary-btn" type="submit">Create Subject</button>
         </div>
       </form>
     </dialog>

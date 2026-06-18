@@ -61,6 +61,7 @@ function defaultDb() {
       },
     ],
     bookmarks: {},
+    helpfulVotes: {},
   };
 }
 
@@ -235,6 +236,10 @@ function ensureDbShape(db) {
     db.bookmarks = {};
     changed = true;
   }
+  if (!db.helpfulVotes || typeof db.helpfulVotes !== "object") {
+    db.helpfulVotes = {};
+    changed = true;
+  }
   if (!Array.isArray(db.folders)) {
     db.folders = [];
     changed = true;
@@ -248,6 +253,12 @@ function ensureDbShape(db) {
       resource.subject = subject;
       changed = true;
     }
+    for (const key of ["unit", "teacher", "semester"]) {
+      if (resource[key] == null) {
+        resource[key] = "";
+        changed = true;
+      }
+    }
     ensureFolder(db, resource.subject, resource.authorId);
   }
   for (const request of db.requests) {
@@ -255,6 +266,12 @@ function ensureDbShape(db) {
     if (request.subject !== subject) {
       request.subject = subject;
       changed = true;
+    }
+    for (const key of ["unit", "teacher", "semester"]) {
+      if (request[key] == null) {
+        request[key] = "";
+        changed = true;
+      }
     }
     ensureFolder(db, request.subject, request.authorId);
   }
@@ -276,6 +293,14 @@ function decorate(db, user) {
     commentCount.set(comment.resourceId, (commentCount.get(comment.resourceId) || 0) + 1);
   }
   const bookmarks = new Set(db.bookmarks[user.id] || []);
+  const helpfulByMe = new Set(db.helpfulVotes[user.id] || []);
+  const helpfulCount = new Map();
+  for (const resourceIds of Object.values(db.helpfulVotes)) {
+    if (!Array.isArray(resourceIds)) continue;
+    for (const resourceId of resourceIds) {
+      helpfulCount.set(resourceId, (helpfulCount.get(resourceId) || 0) + 1);
+    }
+  }
   const resourceCountByFolder = new Map();
   const openRequestCountByFolder = new Map();
   for (const resource of db.resources) {
@@ -310,6 +335,8 @@ function decorate(db, user) {
         author: usersById.get(resource.authorId) || { id: resource.authorId, name: "Classmate" },
         isMine: resource.authorId === user.id,
         bookmarked: bookmarks.has(resource.id),
+        helpfulByMe: helpfulByMe.has(resource.id),
+        helpfulCount: helpfulCount.get(resource.id) || 0,
         commentCount: commentCount.get(resource.id) || 0,
       })),
     comments: db.comments.map((comment) => ({
@@ -333,6 +360,86 @@ function decorate(db, user) {
         author: usersById.get(announcement.authorId) || { id: announcement.authorId, name: "Class Hub" },
         isMine: announcement.authorId === user.id,
       })),
+    insights: buildInsights(db, helpfulCount),
+  };
+}
+
+function cleanMeta(value, max = 80) {
+  return String(value || "").replace(/\s+/g, " ").trim().slice(0, max);
+}
+
+function buildInsights(db, helpfulCount) {
+  const tagCount = new Map();
+  const subjectCount = new Map();
+  const recentActivity = [];
+  for (const resource of db.resources) {
+    const subject = normalizeFolderName(resource.subject);
+    subjectCount.set(subject, (subjectCount.get(subject) || 0) + 1);
+    for (const tag of resource.tags || []) {
+      tagCount.set(tag, (tagCount.get(tag) || 0) + 1);
+    }
+    recentActivity.push({
+      id: resource.id,
+      type: "resource",
+      title: resource.title,
+      subject,
+      createdAt: resource.createdAt,
+    });
+  }
+  for (const request of db.requests) {
+    recentActivity.push({
+      id: request.id,
+      type: request.fulfilled ? "fulfilled request" : "request",
+      title: request.title,
+      subject: normalizeFolderName(request.subject),
+      createdAt: request.createdAt,
+    });
+  }
+  for (const announcement of db.announcements) {
+    recentActivity.push({
+      id: announcement.id,
+      type: "announcement",
+      title: announcement.text.slice(0, 90),
+      subject: "Class",
+      createdAt: announcement.createdAt,
+    });
+  }
+
+  const totalResources = db.resources.length;
+  const openRequests = db.requests.filter((request) => !request.fulfilled).length;
+  const fulfilledRequests = db.requests.filter((request) => request.fulfilled).length;
+  const totalRequests = db.requests.length;
+  const pinnedResources = db.resources.filter((resource) => resource.pinned).length;
+  const topResource = db.resources
+    .slice()
+    .sort((a, b) => (helpfulCount.get(b.id) || 0) - (helpfulCount.get(a.id) || 0) || b.createdAt.localeCompare(a.createdAt))[0];
+
+  return {
+    totalResources,
+    openRequests,
+    fulfilledRequests,
+    pinnedResources,
+    completionRate: totalRequests ? Math.round((fulfilledRequests / totalRequests) * 100) : 0,
+    subjectCount: subjectCount.size,
+    topTags: [...tagCount.entries()]
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .slice(0, 8)
+      .map(([name, count]) => ({ name, count })),
+    topSubjects: [...subjectCount.entries()]
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .slice(0, 5)
+      .map(([name, count]) => ({ name, count })),
+    topResource: topResource
+      ? {
+          id: topResource.id,
+          title: topResource.title,
+          subject: topResource.subject,
+          helpfulCount: helpfulCount.get(topResource.id) || 0,
+        }
+      : null,
+    recentActivity: recentActivity
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, 9),
   };
 }
 
@@ -492,6 +599,9 @@ async function handleApi(req, res, reqUrl) {
         type,
         title,
         subject,
+        unit: cleanMeta(payload.unit),
+        teacher: cleanMeta(payload.teacher),
+        semester: cleanMeta(payload.semester, 40),
         description,
         tags: normalizeTags(payload.tags),
         authorId: user.id,
@@ -564,6 +674,9 @@ async function handleApi(req, res, reqUrl) {
       }
       resource.title = title;
       resource.subject = ensureFolder(db, payload.subject, user.id).name;
+      resource.unit = cleanMeta(payload.unit);
+      resource.teacher = cleanMeta(payload.teacher);
+      resource.semester = cleanMeta(payload.semester, 40);
       resource.description = String(payload.description || "").trim().slice(0, 800);
       resource.tags = normalizeTags(payload.tags);
       resource.pinned = Boolean(payload.pinned);
@@ -607,6 +720,9 @@ async function handleApi(req, res, reqUrl) {
       db.comments = db.comments.filter((item) => item.resourceId !== resource.id);
       for (const userId of Object.keys(db.bookmarks)) {
         db.bookmarks[userId] = db.bookmarks[userId].filter((idValue) => idValue !== resource.id);
+      }
+      for (const userId of Object.keys(db.helpfulVotes)) {
+        db.helpfulVotes[userId] = db.helpfulVotes[userId].filter((idValue) => idValue !== resource.id);
       }
       writeDb(db);
       if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
@@ -665,6 +781,22 @@ async function handleApi(req, res, reqUrl) {
       return;
     }
 
+    const helpfulMatch = reqUrl.pathname.match(/^\/api\/resources\/([^/]+)\/helpful$/);
+    if (helpfulMatch && req.method === "POST") {
+      const resource = db.resources.find((item) => item.id === helpfulMatch[1]);
+      if (!resource) {
+        fail(res, 404, "Resource not found.");
+        return;
+      }
+      const current = new Set(db.helpfulVotes[user.id] || []);
+      if (current.has(resource.id)) current.delete(resource.id);
+      else current.add(resource.id);
+      db.helpfulVotes[user.id] = [...current];
+      writeDb(db);
+      json(res, 200, decorate(db, user));
+      return;
+    }
+
     if (route === "POST /api/requests") {
       const payload = await readJson(req);
       const title = String(payload.title || "").trim().slice(0, 120);
@@ -678,6 +810,9 @@ async function handleApi(req, res, reqUrl) {
         title,
         details,
         subject: ensureFolder(db, payload.subject, user.id).name,
+        unit: cleanMeta(payload.unit),
+        teacher: cleanMeta(payload.teacher),
+        semester: cleanMeta(payload.semester, 40),
         authorId: user.id,
         fulfilled: false,
         createdAt: now(),

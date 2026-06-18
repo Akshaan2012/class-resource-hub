@@ -5,6 +5,9 @@ let state = null;
 let activeSearch = "";
 let activeType = "all";
 let activeFolder = "all";
+let activeUnit = "all";
+let activeTeacher = "all";
+let activeSemester = "all";
 let toastTimer = null;
 let autoRefreshTimer = null;
 let lastSyncAt = null;
@@ -120,8 +123,18 @@ function folderKey(name) {
   return normalizeFolderName(name).toLowerCase();
 }
 
+function cleanFilterValue(value) {
+  return String(value || "").replace(/\s+/g, " ").trim();
+}
+
 function folderMatches(item) {
   return activeFolder === "all" || folderKey(item.subject) === folderKey(activeFolder);
+}
+
+function metaMatches(item) {
+  return (activeUnit === "all" || cleanFilterValue(item.unit) === activeUnit)
+    && (activeTeacher === "all" || cleanFilterValue(item.teacher) === activeTeacher)
+    && (activeSemester === "all" || cleanFilterValue(item.semester) === activeSemester);
 }
 
 function currentTheme() {
@@ -194,6 +207,7 @@ function wireDashboardEvents() {
   document.querySelector("#new-resource-btn").addEventListener("click", () => openResourceDialog());
   document.querySelector("#new-folder-btn").addEventListener("click", () => openDialog("#folder-dialog"));
   document.querySelector("#new-request-btn").addEventListener("click", () => openRequestDialog());
+  document.querySelector("#side-request-btn").addEventListener("click", () => openRequestDialog());
   document.querySelector("#new-announcement-btn").addEventListener("click", () => openDialog("#announcement-dialog"));
 
   document.querySelector("#search-input").addEventListener("input", (event) => {
@@ -202,6 +216,18 @@ function wireDashboardEvents() {
   });
   document.querySelector("#type-filter").addEventListener("change", (event) => {
     activeType = event.target.value;
+    renderResources();
+  });
+  document.querySelector("#unit-filter").addEventListener("change", (event) => {
+    activeUnit = event.target.value;
+    renderResources();
+  });
+  document.querySelector("#teacher-filter").addEventListener("change", (event) => {
+    activeTeacher = event.target.value;
+    renderResources();
+  });
+  document.querySelector("#semester-filter").addEventListener("change", (event) => {
+    activeSemester = event.target.value;
     renderResources();
   });
 
@@ -226,15 +252,30 @@ function wireDashboardEvents() {
 }
 
 function renderDashboardData() {
+  const insights = state.insights || {};
   document.querySelector("#stat-resources").textContent = state.resources.length;
-  document.querySelector("#stat-bookmarks").textContent = state.resources.filter((item) => item.bookmarked).length;
+  document.querySelector("#stat-subjects").textContent = insights.subjectCount || state.folders.length;
   document.querySelector("#stat-requests").textContent = state.requests.filter((item) => !item.fulfilled).length;
-  document.querySelector("#stat-code").textContent = state.classCode;
+  document.querySelector("#stat-completion").textContent = `${insights.completionRate || 0}%`;
+  renderFocus();
   renderFolders();
+  renderFilterOptions();
+  renderInsights();
   renderResources();
   renderRequests();
   renderAnnouncements();
+  renderPulse();
+  renderActivity();
   updateSyncStatus();
+}
+
+function renderFocus() {
+  const openRequests = state.requests.filter((request) => !request.fulfilled).length;
+  const pinned = state.resources.filter((resource) => resource.pinned).length;
+  document.querySelector("#focus-title").textContent = openRequests
+    ? `${openRequests} open request${openRequests === 1 ? "" : "s"} need attention`
+    : "Class resources are caught up";
+  document.querySelector("#focus-subtitle").textContent = `${state.resources.length} resources, ${pinned} pinned, ${state.comments.length} comments, and ${state.resources.filter((item) => item.bookmarked).length} bookmarks in your private local hub.`;
 }
 
 function renderFolders() {
@@ -262,7 +303,7 @@ function folderCard(folder) {
   const isActive = activeFolder === "all"
     ? folder.value === "all"
     : folderKey(folder.value) === folderKey(activeFolder);
-  const requestText = `${folder.openRequestCount} open request${folder.openRequestCount === 1 ? "" : "s"}`;
+  const requestText = `${folder.openRequestCount} open`;
   return `
     <button class="folder-card ${isActive ? "is-active" : ""}" type="button" data-folder="${escapeHtml(folder.value)}">
       <span class="folder-card-title">${escapeHtml(folder.name)}</span>
@@ -278,15 +319,48 @@ function handleFolderClick(event) {
   renderDashboardData();
 }
 
+function renderFilterOptions() {
+  fillFilter("#unit-filter", "All units", activeUnit, metadataValues("unit"), (value) => {
+    activeUnit = value;
+  });
+  fillFilter("#teacher-filter", "All teachers", activeTeacher, metadataValues("teacher"), (value) => {
+    activeTeacher = value;
+  });
+  fillFilter("#semester-filter", "All semesters", activeSemester, metadataValues("semester"), (value) => {
+    activeSemester = value;
+  });
+}
+
+function metadataValues(key) {
+  return [...new Set(state.resources.map((resource) => cleanFilterValue(resource[key])).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b));
+}
+
+function fillFilter(selector, allLabel, current, values, updateCurrent) {
+  const select = document.querySelector(selector);
+  if (!select) return;
+  const nextValue = current === "all" || values.includes(current) ? current : "all";
+  updateCurrent(nextValue);
+  select.innerHTML = [
+    `<option value="all">${allLabel}</option>`,
+    ...values.map((value) => `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`),
+  ].join("");
+  select.value = nextValue;
+}
+
 function filteredResources() {
   return state.resources.filter((resource) => {
     if (!folderMatches(resource)) return false;
+    if (!metaMatches(resource)) return false;
     if (activeType === "bookmarks" && !resource.bookmarked) return false;
     if (activeType !== "all" && activeType !== "bookmarks" && resource.type !== activeType) return false;
     if (!activeSearch) return true;
     const haystack = [
       resource.title,
       resource.subject,
+      resource.unit,
+      resource.teacher,
+      resource.semester,
       resource.description,
       resource.author?.name,
       resource.content,
@@ -309,11 +383,17 @@ function resourceCard(resource) {
   const comments = state.comments.filter((comment) => comment.resourceId === resource.id);
   const tagHtml = (resource.tags || []).map((tag) => `<span class="tag">#${escapeHtml(tag)}</span>`).join("");
   const preview = previewHtml(resource);
-  const fileMeta = resource.type === "file" ? ` | ${escapeHtml(resource.fileName || "file")} ${resource.fileSize ? `| ${fileSize(resource.fileSize)}` : ""}` : "";
+  const fileMeta = resource.type === "file" ? `${escapeHtml(resource.fileName || "file")} ${resource.fileSize ? `| ${fileSize(resource.fileSize)}` : ""}` : "";
   const editActions = resource.isMine
     ? `<button class="action-btn" data-action="edit" data-id="${resource.id}" type="button">Edit</button>
        <button class="action-btn danger-btn" data-action="delete" data-id="${resource.id}" type="button">Delete</button>`
     : "";
+  const metaItems = [
+    ["Subject", resource.subject || "General"],
+    ["Unit", resource.unit],
+    ["Teacher", resource.teacher],
+    ["Semester", resource.semester],
+  ].filter((item) => item[1]);
 
   return `
     <article class="resource-card" data-resource-id="${resource.id}">
@@ -325,15 +405,17 @@ function resourceCard(resource) {
             <h3>${escapeHtml(resource.title)}</h3>
           </div>
           <p class="resource-meta">
-            ${escapeHtml(resource.subject || "General")} | ${escapeHtml(resource.author?.name || "Classmate")} | ${dateLabel(resource.createdAt)}${fileMeta}
+            ${escapeHtml(resource.author?.name || "Classmate")} | ${dateLabel(resource.createdAt)}${fileMeta ? ` | ${fileMeta}` : ""}
           </p>
         </div>
         <div class="resource-actions">
           ${mainAction(resource)}
-          <button class="action-btn" data-action="bookmark" data-id="${resource.id}" type="button">${resource.bookmarked ? "Bookmarked" : "Bookmark"}</button>
+          <button class="action-btn" data-action="helpful" data-id="${resource.id}" type="button">${resource.helpfulByMe ? "Helpful" : "Mark Helpful"} (${resource.helpfulCount || 0})</button>
+          <button class="action-btn" data-action="bookmark" data-id="${resource.id}" type="button">${resource.bookmarked ? "Saved" : "Save"}</button>
           ${editActions}
         </div>
       </div>
+      ${metaItems.length ? `<div class="meta-grid">${metaItems.map(([label, value]) => `<span><strong>${label}</strong>${escapeHtml(value)}</span>`).join("")}</div>` : ""}
       ${resource.description ? `<p class="resource-body">${escapeHtml(resource.description)}</p>` : ""}
       ${preview}
       ${tagHtml ? `<div class="tag-row">${tagHtml}</div>` : ""}
@@ -383,27 +465,88 @@ function commentHtml(comment) {
   `;
 }
 
-function renderRequests() {
-  const list = document.querySelector("#request-list");
-  const requests = state.requests.filter(folderMatches);
-  list.innerHTML = requests.length
-    ? requests.map((request) => `
-      <article class="mini-item">
-        <h3>${escapeHtml(request.title)}</h3>
-        <p>${escapeHtml(request.subject || "General")} | ${escapeHtml(request.author?.name || "Classmate")} | ${dateLabel(request.createdAt)}</p>
-        ${request.details ? `<p>${escapeHtml(request.details)}</p>` : ""}
-        <div class="request-actions">
-          <span class="pill ${request.fulfilled ? "" : "type-pill"}">${request.fulfilled ? "Fulfilled" : "Open"}</span>
-          ${request.isMine ? `
-            <span>
-              <button class="action-btn" data-action="toggle-request" data-id="${request.id}" data-fulfilled="${request.fulfilled ? "false" : "true"}" type="button">${request.fulfilled ? "Reopen" : "Done"}</button>
-              <button class="action-btn danger-btn" data-action="delete-request" data-id="${request.id}" type="button">Delete</button>
-            </span>
-          ` : ""}
-        </div>
+function renderInsights() {
+  const insights = state.insights || {};
+  const tags = insights.topTags || [];
+  document.querySelector("#top-tags").innerHTML = tags.length
+    ? tags.map((tag) => `<span class="tag">#${escapeHtml(tag.name)} ${tag.count}</span>`).join("")
+    : '<span class="subtle">No tags yet.</span>';
+  const subjects = insights.topSubjects || [];
+  const max = Math.max(1, ...subjects.map((subject) => subject.count || 0));
+  document.querySelector("#top-subjects").innerHTML = subjects.length
+    ? subjects.map((subject) => `
+      <div class="meter-row">
+        <span>${escapeHtml(subject.name)}</span>
+        <i style="--size:${Math.max(8, Math.round((subject.count / max) * 100))}%"></i>
+        <strong>${subject.count}</strong>
+      </div>
+    `).join("")
+    : '<p class="subtle">No subjects yet.</p>';
+  const top = insights.topResource;
+  document.querySelector("#top-resource").textContent = top
+    ? `${top.title} in ${top.subject} (${top.helpfulCount} helpful)`
+    : "No helpful marks yet.";
+}
+
+function renderPulse() {
+  const insights = state.insights || {};
+  const bookmarks = state.resources.filter((resource) => resource.bookmarked).length;
+  const items = [
+    ["Pinned resources", insights.pinnedResources || 0],
+    ["Saved by you", bookmarks],
+    ["Fulfilled requests", insights.fulfilledRequests || 0],
+    ["Comments", state.comments.length],
+  ];
+  document.querySelector("#pulse-list").innerHTML = items.map(([label, value]) => `
+    <div class="pulse-item">
+      <strong>${value}</strong>
+      <span>${label}</span>
+    </div>
+  `).join("");
+}
+
+function renderActivity() {
+  const activity = state.insights?.recentActivity || [];
+  document.querySelector("#activity-list").innerHTML = activity.length
+    ? activity.map((item) => `
+      <article class="mini-item activity-item">
+        <span class="pill">${escapeHtml(item.type)}</span>
+        <h3>${escapeHtml(item.title)}</h3>
+        <p>${escapeHtml(item.subject)} | ${dateLabel(item.createdAt)}</p>
       </article>
     `).join("")
-    : '<p class="subtle">No requests yet.</p>';
+    : '<p class="subtle">No activity yet.</p>';
+}
+
+function renderRequests() {
+  const list = document.querySelector("#request-list");
+  const requests = state.requests.filter((request) => folderMatches(request) && metaMatches(request));
+  list.innerHTML = requests.length
+    ? requests.map((request) => {
+      const meta = [
+        request.subject || "General",
+        request.unit,
+        request.teacher,
+        request.semester,
+      ].filter(Boolean).join(" | ");
+      return `
+        <article class="mini-item">
+          <h3>${escapeHtml(request.title)}</h3>
+          <p>${escapeHtml(meta)} | ${escapeHtml(request.author?.name || "Classmate")} | ${dateLabel(request.createdAt)}</p>
+          ${request.details ? `<p>${escapeHtml(request.details)}</p>` : ""}
+          <div class="request-actions">
+            <span class="pill ${request.fulfilled ? "" : "type-pill"}">${request.fulfilled ? "Fulfilled" : "Open"}</span>
+            ${request.isMine ? `
+              <span>
+                <button class="action-btn" data-action="toggle-request" data-id="${request.id}" data-fulfilled="${request.fulfilled ? "false" : "true"}" type="button">${request.fulfilled ? "Reopen" : "Done"}</button>
+                <button class="action-btn danger-btn" data-action="delete-request" data-id="${request.id}" type="button">Delete</button>
+              </span>
+            ` : ""}
+          </div>
+        </article>
+      `;
+    }).join("")
+    : '<p class="subtle">No requests in this view.</p>';
 }
 
 function renderAnnouncements() {
@@ -451,6 +594,9 @@ function openResourceDialog(resource = null) {
   });
   form.elements.title.value = resource?.title || "";
   populateSubjectSelect(form.elements.subject, resource?.subject || (activeFolder === "all" ? "General" : activeFolder));
+  form.elements.unit.value = resource?.unit || (activeUnit === "all" ? "" : activeUnit);
+  form.elements.teacher.value = resource?.teacher || (activeTeacher === "all" ? "" : activeTeacher);
+  form.elements.semester.value = resource?.semester || (activeSemester === "all" ? "" : activeSemester);
   form.elements.tags.value = (resource?.tags || []).join(", ");
   form.elements.description.value = resource?.description || "";
   form.elements.url.value = resource?.url || "";
@@ -464,6 +610,9 @@ function openRequestDialog() {
   const form = document.querySelector("#request-form");
   form.reset();
   populateSubjectSelect(form.elements.subject, activeFolder === "all" ? "General" : activeFolder);
+  form.elements.unit.value = activeUnit === "all" ? "" : activeUnit;
+  form.elements.teacher.value = activeTeacher === "all" ? "" : activeTeacher;
+  form.elements.semester.value = activeSemester === "all" ? "" : activeSemester;
   openDialog("#request-dialog");
 }
 
@@ -510,7 +659,7 @@ async function saveFolder(event) {
     activeFolder = name;
     form.reset();
     form.closest("dialog").close();
-    showToast("Folder created.");
+    showToast("Subject created.");
     renderDashboardData();
   } catch (error) {
     showToast(error.message);
@@ -526,6 +675,9 @@ async function saveResource(event) {
     type,
     title: form.elements.title.value,
     subject: form.elements.subject.value,
+    unit: form.elements.unit.value,
+    teacher: form.elements.teacher.value,
+    semester: form.elements.semester.value,
     tags: form.elements.tags.value,
     description: form.elements.description.value,
     pinned: form.elements.pinned.checked,
@@ -552,6 +704,9 @@ async function saveResource(event) {
       body: payload,
     });
     activeFolder = normalizeFolderName(payload.subject);
+    activeUnit = cleanFilterValue(payload.unit) || "all";
+    activeTeacher = cleanFilterValue(payload.teacher) || "all";
+    activeSemester = cleanFilterValue(payload.semester) || "all";
     form.closest("dialog").close();
     showToast(id ? "Resource updated." : "Resource added.");
     renderDashboardData();
@@ -574,6 +729,11 @@ async function handleResourceClick(event) {
     }
     if (action === "bookmark") {
       state = await api(`/api/resources/${id}/bookmark`, { method: "POST", body: {} });
+      renderDashboardData();
+      return;
+    }
+    if (action === "helpful") {
+      state = await api(`/api/resources/${id}/helpful`, { method: "POST", body: {} });
       renderDashboardData();
       return;
     }
@@ -608,6 +768,7 @@ async function handleCommentSubmit(event) {
       method: "POST",
       body: { body },
     });
+    form.reset();
     renderDashboardData();
   } catch (error) {
     showToast(error.message);
@@ -623,10 +784,16 @@ async function saveRequest(event) {
       body: {
         title: form.elements.title.value,
         subject: form.elements.subject.value,
+        unit: form.elements.unit.value,
+        teacher: form.elements.teacher.value,
+        semester: form.elements.semester.value,
         details: form.elements.details.value,
       },
     });
     activeFolder = normalizeFolderName(form.elements.subject.value);
+    activeUnit = cleanFilterValue(form.elements.unit.value) || "all";
+    activeTeacher = cleanFilterValue(form.elements.teacher.value) || "all";
+    activeSemester = cleanFilterValue(form.elements.semester.value) || "all";
     form.reset();
     form.closest("dialog").close();
     showToast("Request posted.");
