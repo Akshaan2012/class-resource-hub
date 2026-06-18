@@ -31,6 +31,7 @@ const APP_SLUG = process.env.VITE_APP_SLUG || process.env.APP_SLUGS || "akshaan-
 const SUPABASE_URL = String(process.env.SUPABASE_URL || "").replace(/\/+$/, "");
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || "";
 const SUPABASE_STORAGE_BUCKET = process.env.SUPABASE_STORAGE_BUCKET || "class-resources";
+const SUPABASE_RESOURCE_SCOPE = String(process.env.SUPABASE_RESOURCE_SCOPE || "class").trim().toLowerCase();
 const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, "public");
 const DATA_DIR = process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : path.join(ROOT, "data");
@@ -379,6 +380,7 @@ function mapSupabaseResource(row) {
     id: `sb_${row.id}`,
     supabaseId: row.id,
     source: "supabase",
+    appSlug: row.app_slug || "",
     type,
     title: row.title || "Untitled resource",
     subject: metadata.subject || "General",
@@ -413,10 +415,12 @@ function mapSupabaseResource(row) {
 
 async function fetchSupabaseResources() {
   if (!supabaseEnabled()) return { resources: [], status: "not_configured" };
-  const query = `/rest/v1/resources?select=*&app_slug=eq.${encodeURIComponent(APP_SLUG)}&order=created_at.desc`;
+  const scope = SUPABASE_RESOURCE_SCOPE === "app" ? "app" : "class";
+  const appFilter = scope === "app" ? `&app_slug=eq.${encodeURIComponent(APP_SLUG)}` : "";
+  const query = `/rest/v1/resources?select=*${appFilter}&order=created_at.desc`;
   const result = await supabaseRequest(query);
   if (result.error) return { resources: [], status: "error", error: result.error };
-  return { resources: (result.data || []).map(mapSupabaseResource), status: "connected" };
+  return { resources: (result.data || []).map(mapSupabaseResource), status: "connected", scope };
 }
 
 async function deleteSupabaseResource(resource) {
@@ -552,6 +556,10 @@ async function decorate(db, user) {
       ...resource,
       isMine: sameName(resource.author?.name, user.name),
     }));
+  for (const resource of supabaseResources) {
+    const key = folderKey(resource.subject);
+    resourceCountByFolder.set(key, (resourceCountByFolder.get(key) || 0) + 1);
+  }
   const localResources = db.resources
     .slice()
     .sort((a, b) => Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)) || b.createdAt.localeCompare(a.createdAt))
@@ -574,6 +582,7 @@ async function decorate(db, user) {
       status: supabase.status,
       error: supabase.error || "",
       appSlug: APP_SLUG,
+      scope: supabase.scope || (SUPABASE_RESOURCE_SCOPE === "app" ? "app" : "class"),
       bucket: SUPABASE_STORAGE_BUCKET,
       resourceCount: supabaseResources.length,
     },

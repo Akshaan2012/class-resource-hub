@@ -115,6 +115,11 @@ function fileSize(bytes) {
   return `${value.toFixed(index === 0 ? 0 : 1)} ${units[index]}`;
 }
 
+function appSourceLabel(slug) {
+  const clean = String(slug || "class-shared").replace(/[-_]+/g, " ").trim();
+  return clean.replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
 function normalizeFolderName(name) {
   return String(name || "General").replace(/\s+/g, " ").trim() || "General";
 }
@@ -475,7 +480,8 @@ function resourceCard(resource) {
     ["Unit", resource.unit],
     ["Teacher", resource.teacher],
     ["Semester", resource.semester],
-  ].filter((item) => item[1]);
+    resource.source === "supabase" ? ["Source", appSourceLabel(resource.appSlug)] : null,
+  ].filter((item) => item && item[1]);
 
   return `
     <article class="resource-card" data-resource-id="${resource.id}">
