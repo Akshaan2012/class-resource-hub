@@ -128,6 +128,8 @@ Use `HOST=0.0.0.0` when sharing on Wi-Fi.
 
 Supabase is not connected yet. Add the project URL, anon key, and professor-provided schema details before switching the app from local JSON storage to Supabase.
 
+See [docs/SUPABASE.md](docs/SUPABASE.md) and [docs/supabase-schema.sql](docs/supabase-schema.sql) for the database handoff.
+
 ## Data Storage
 
 The app creates its own local database at:
