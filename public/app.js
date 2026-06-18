@@ -514,15 +514,53 @@ function resourceCard(resource) {
 
 function mainAction(resource) {
   if (resource.type === "file") {
-    if (resource.source === "supabase" && resource.url) {
-      return `<a class="action-btn link-action" href="${escapeHtml(resource.url)}" target="_blank" rel="noopener noreferrer">Open</a>`;
+    if (isPreviewableFile(resource)) {
+      const viewUrl = resource.source === "supabase"
+        ? `/api/supabase-view/${encodeURIComponent(resource.supabaseId)}`
+        : `/api/view/${encodeURIComponent(resource.id)}`;
+      const downloadUrl = resource.source === "supabase" && resource.url
+        ? resource.url
+        : `/api/download/${encodeURIComponent(resource.id)}`;
+      return `<a class="action-btn link-action" href="${viewUrl}" target="_blank" rel="noopener noreferrer">Open</a>
+              <a class="action-btn" href="${escapeHtml(downloadUrl)}" target="_blank" rel="noopener noreferrer">Download</a>`;
     }
-    return `<a class="action-btn link-action" href="/api/download/${resource.id}">Download</a>`;
+    if (resource.source === "supabase" && resource.url) {
+      return `<a class="action-btn link-action" href="${escapeHtml(resource.url)}" target="_blank" rel="noopener noreferrer">Download</a>`;
+    }
+    return `<a class="action-btn link-action" href="/api/download/${encodeURIComponent(resource.id)}">Download</a>`;
   }
   if (resource.type === "link") {
     return `<a class="action-btn link-action" href="${escapeHtml(resource.url)}" target="_blank" rel="noopener noreferrer">Open</a>`;
   }
   return `<button class="action-btn" data-action="copy" data-id="${resource.id}" type="button">Copy</button>`;
+}
+
+function isPreviewableFile(resource) {
+  const name = String(resource.fileName || resource.title || "").toLowerCase();
+  const mime = String(resource.mime || "").toLowerCase();
+  return (
+    mime.startsWith("image/") ||
+    mime.startsWith("audio/") ||
+    mime.startsWith("video/") ||
+    mime.startsWith("text/") ||
+    mime === "application/pdf" ||
+    mime === "application/json" ||
+    name.endsWith(".html") ||
+    name.endsWith(".htm") ||
+    name.endsWith(".pdf") ||
+    name.endsWith(".png") ||
+    name.endsWith(".jpg") ||
+    name.endsWith(".jpeg") ||
+    name.endsWith(".gif") ||
+    name.endsWith(".webp") ||
+    name.endsWith(".svg") ||
+    name.endsWith(".mp3") ||
+    name.endsWith(".mp4") ||
+    name.endsWith(".webm") ||
+    name.endsWith(".txt") ||
+    name.endsWith(".md") ||
+    name.endsWith(".json")
+  );
 }
 
 function previewHtml(resource) {

@@ -668,6 +668,34 @@ function resourceForDownload(resource) {
   return safeJoin(UPLOAD_DIR, resource.filePath);
 }
 
+function isHtmlResource(resource) {
+  const name = String(resource?.fileName || resource?.title || "").toLowerCase();
+  const mime = String(resource?.mime || "").toLowerCase();
+  return mime.includes("text/html") || name.endsWith(".html") || name.endsWith(".htm");
+}
+
+function mimeForResource(resource, filePath = "") {
+  const explicit = String(resource?.mime || "").trim();
+  if (explicit && explicit !== "application/octet-stream") return explicit;
+  const ext = path.extname(resource?.fileName || resource?.title || filePath || "").toLowerCase();
+  return MIME_TYPES[ext] || "application/octet-stream";
+}
+
+function isInlineViewableResource(resource) {
+  const mime = mimeForResource(resource).toLowerCase();
+  const name = String(resource?.fileName || resource?.title || "").toLowerCase();
+  return (
+    mime.startsWith("image/") ||
+    mime.startsWith("audio/") ||
+    mime.startsWith("video/") ||
+    mime.startsWith("text/") ||
+    mime === "application/pdf" ||
+    mime === "application/json" ||
+    name.endsWith(".html") ||
+    name.endsWith(".htm")
+  );
+}
+
 function deleteResourceRecord(db, resource) {
   const filePath = resourceForDownload(resource);
   db.resources = db.resources.filter((item) => item.id !== resource.id);
@@ -706,7 +734,7 @@ function kickCamper(db, camperId) {
   return filePaths;
 }
 
-function serveFile(res, filePath, downloadName) {
+function serveFile(res, filePath, downloadName, options = {}) {
   fs.readFile(filePath, (error, content) => {
     if (error) {
       fail(res, 404, "Not found.");
@@ -714,11 +742,16 @@ function serveFile(res, filePath, downloadName) {
     }
     const ext = path.extname(filePath).toLowerCase();
     const headers = {
-      "Content-Type": MIME_TYPES[ext] || "application/octet-stream",
+      "Content-Type": options.contentType || MIME_TYPES[ext] || "application/octet-stream",
       "Cache-Control": "no-store",
       "Content-Length": content.length,
     };
-    if (downloadName) {
+    if (options.inlineHtml) {
+      headers["Content-Type"] = "text/html; charset=utf-8";
+      headers["Content-Security-Policy"] = "sandbox allow-scripts allow-forms allow-popups allow-modals";
+    } else if (options.inline) {
+      headers["Content-Disposition"] = "inline";
+    } else if (downloadName) {
       headers["Content-Disposition"] = `attachment; filename="${downloadName.replace(/"/g, "")}"`;
     }
     res.writeHead(200, headers);
@@ -808,6 +841,51 @@ async function handleApi(req, res, reqUrl) {
         return;
       }
       serveFile(res, filePath, resource.fileName || resource.title);
+      return;
+    }
+
+    if (reqUrl.pathname.startsWith("/api/view/") && req.method === "GET") {
+      const user = requireUser(req, res, db);
+      if (!user) return;
+      const resourceId = reqUrl.pathname.split("/").pop();
+      const resource = db.resources.find((item) => item.id === resourceId);
+      const filePath = resourceForDownload(resource);
+      if (!filePath || !isInlineViewableResource(resource)) {
+        fail(res, 404, "Previewable file not found.");
+        return;
+      }
+      serveFile(res, filePath, resource.fileName || resource.title, {
+        inline: true,
+        inlineHtml: isHtmlResource(resource),
+        contentType: mimeForResource(resource, filePath),
+      });
+      return;
+    }
+
+    if (reqUrl.pathname.startsWith("/api/supabase-view/") && req.method === "GET") {
+      const user = requireUser(req, res, db);
+      if (!user) return;
+      const supabaseId = reqUrl.pathname.split("/").pop();
+      const supabase = await fetchSupabaseResources();
+      const resource = supabase.resources.find((item) => item.supabaseId === supabaseId);
+      if (!resource || !resource.url || !isInlineViewableResource(resource)) {
+        fail(res, 404, "Supabase previewable file not found.");
+        return;
+      }
+      const upstream = await fetch(resource.url);
+      if (!upstream.ok) {
+        fail(res, upstream.status, "Could not load Supabase file.");
+        return;
+      }
+      const content = Buffer.from(await upstream.arrayBuffer());
+      res.writeHead(200, {
+        "Content-Type": isHtmlResource(resource) ? "text/html; charset=utf-8" : mimeForResource(resource),
+        "Cache-Control": "no-store",
+        "Content-Length": content.length,
+        "Content-Disposition": "inline",
+        ...(isHtmlResource(resource) ? { "Content-Security-Policy": "sandbox allow-scripts allow-forms allow-popups allow-modals" } : {}),
+      });
+      res.end(content);
       return;
     }
 
@@ -932,7 +1010,7 @@ async function handleApi(req, res, reqUrl) {
         resource.filePath = storedName;
         resource.fileName = originalName;
         resource.fileSize = buffer.length;
-        resource.mime = String(file.mime || "application/octet-stream").slice(0, 120);
+        resource.mime = String(file.mime || MIME_TYPES[path.extname(originalName).toLowerCase()] || "application/octet-stream").slice(0, 120);
       }
 
       db.resources.push(resource);
